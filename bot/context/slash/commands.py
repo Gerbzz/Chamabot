@@ -7,7 +7,7 @@ import time
 import json
 
 from core.client import dc
-from core.utils import error_embed, ok_embed, parse_duration, get_nick
+from core.utils import error_embed, ok_embed, parse_duration, get_nick, find
 from core.console import log
 from core.config import cfg
 
