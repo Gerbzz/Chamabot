@@ -32,7 +32,7 @@ class Embeds:
 	def check_in(self, not_ready):
 		embed = Embed(
 			colour=Colour(0xf5d858),
-			title=self.m.gt("__**{queue}** is now on the check-in stage!__").format(
+			title=self.m.gt("__**{queue}** is now on the ready check stage!__").format(
 				queue=self.m.queue.name[0].upper()+self.m.queue.name[1:]
 			)
 		)
@@ -41,34 +41,37 @@ class Embeds:
 			value="\n".join((f" \u200b {'❌ ' if p in self.m.check_in.discarded_players else ''}<@{p.id}>" for p in not_ready)),
 			inline=False
 		)
-		if not len(self.m.check_in.maps):
-			embed.add_field(
-				name="—",
-				value=self.m.gt(
-					"Please react with {ready_emoji} to **check-in** or {not_ready_emoji} to **abort**!").format(
-					ready_emoji=self.m.check_in.READY_EMOJI, not_ready_emoji=self.m.check_in.NOT_READY_EMOJI
-				) + "\n\u200b",
-				inline=False
-			)
-		else:
-			embed.add_field(
-				name="—",
-				value="\n".join([
-					self.m.gt("Please react with {ready_emoji} or vote for a map to **check-in**.").format(
-						ready_emoji=self.m.check_in.READY_EMOJI
-					),
-					self.m.gt("React with {not_ready_emoji} to **abort**!").format(
-						not_ready_emoji=self.m.check_in.NOT_READY_EMOJI
-					) + "\n\u200b\nMaps:",
-					"\n".join([
-						f" \u200b \u200b {self.m.check_in.INT_EMOJIS[i]} \u200b {self.m.check_in.maps[i]}"
-						for i in range(len(self.m.check_in.maps))
-					])
-				]),
-				inline=False
-			)
+		embed.add_field(
+			name="—",
+			value=self.m.gt(
+				"Please react with {ready_emoji} to **ready up** or {not_ready_emoji} to **abort**!").format(
+				ready_emoji=self.m.check_in.READY_EMOJI, not_ready_emoji=self.m.check_in.NOT_READY_EMOJI
+			) + "\n\u200b",
+			inline=False
+		)
 		embed.set_footer(**self.footer)
+		return embed
 
+	def map_vote(self, maps, map_votes):
+		embed = Embed(
+			colour=Colour(0xf5d858),
+			title=self.m.gt("__**{queue}** is now on the map vote stage!__").format(
+				queue=self.m.queue.name[0].upper()+self.m.queue.name[1:]
+			)
+		)
+		embed.add_field(
+			name="—",
+			value="\n".join([
+				self.m.gt("Please vote for your preferred maps by reacting with the corresponding numbers."),
+				"\nMaps:",
+				"\n".join([
+					f" \u200b \u200b {self.m.map_vote.INT_EMOJIS[i]} \u200b {maps[i]} \u200b ({len(map_votes[i])} votes)"
+					for i in range(len(maps))
+				])
+			]),
+			inline=False
+		)
+		embed.set_footer(**self.footer)
 		return embed
 
 	def draft(self):
@@ -114,6 +117,13 @@ class Embeds:
 				)
 
 			embed.add_field(name="—", value=msg + "\n\u200b", inline=False)
+
+		if len(self.m.maps):
+			embed.add_field(
+				name=self.m.qc.gt("Map" if len(self.m.maps) == 1 else "Maps"),
+				value="\n".join((f"**{i}**" for i in self.m.maps)),
+				inline=False
+			)
 
 		embed.set_footer(**self.footer)
 
