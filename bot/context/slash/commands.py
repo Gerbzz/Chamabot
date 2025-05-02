@@ -681,3 +681,63 @@ async def _nick(
 		nick: str
 ): await run_slash(bot.commands.set_nick, interaction=interaction, nick=nick)
 
+
+@dc.slash_command(name='set-channel-config', description='Update channel configuration using JSON', **guild_kwargs)
+async def _set_channel_config(
+	interaction: Interaction,
+	config: str = SlashOption(
+		name="config",
+		description="JSON configuration string",
+		required=True
+	)
+):
+	async def _run(ctx, *args, **kwargs):
+		if not any(role.name in [ctx.guild.get_role(ctx.qc.cfg.admin_role).name, 
+							   ctx.guild.get_role(ctx.qc.cfg.moderator_role).name] 
+				  for role in ctx.author.roles):
+			raise bot.Exc.PermissionError("You don't have permission to use this command.")
+		await bot.commands.set_qc_cfg(ctx, *args, **kwargs)
+	
+	await run_slash(_run, interaction=interaction, config=config)
+
+
+@dc.slash_command(name='set-queue-config', description='Update queue configuration using JSON', **guild_kwargs)
+async def _set_queue_config(
+	interaction: Interaction,
+	queue: str = SlashOption(
+		name="queue",
+		description="Name of the queue to configure",
+		required=True
+	),
+	config: str = SlashOption(
+		name="config",
+		description="JSON configuration string",
+		required=True
+	)
+):
+	async def _run(ctx, *args, **kwargs):
+		if not any(role.name in [ctx.guild.get_role(ctx.qc.cfg.admin_role).name, 
+							   ctx.guild.get_role(ctx.qc.cfg.moderator_role).name] 
+				  for role in ctx.author.roles):
+			raise bot.Exc.PermissionError("You don't have permission to use this command.")
+		await bot.commands.set_queue_cfg(ctx, *args, **kwargs)
+	
+	await run_slash(_run, interaction=interaction, queue=queue, config=config)
+_set_queue_config.on_autocomplete("queue")(autocomplete.queues)
+
+
+@dc.slash_command(name='view-config', description='View current channel or queue configuration', **guild_kwargs)
+async def _view_config(
+	interaction: Interaction,
+	queue: str = SlashOption(
+		name="queue",
+		description="Name of the queue to view config (optional)",
+		required=False
+	)
+):
+	async def _run(ctx, *args, **kwargs):
+		await bot.commands.cfg_qc(ctx, *args, **kwargs)
+	
+	await run_slash(_run, interaction=interaction, queue=queue)
+_view_config.on_autocomplete("queue")(autocomplete.queues)
+
