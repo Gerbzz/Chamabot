@@ -12,14 +12,16 @@ from core.client import dc
 from .check_in import CheckIn
 from .draft import Draft
 from .embeds import Embeds
+from .map_vote import MapVote
 
 
 class Match:
 
 	INIT = 0
-	CHECK_IN = 1
-	DRAFT = 2
-	WAITING_REPORT = 3
+	READY_CHECK = 1
+	MAP_VOTE = 2
+	DRAFT = 3
+	WAITING_REPORT = 4
 
 	TEAM_EMOJIS = [
 		":fox:", ":wolf:", ":dog:", ":bear:", ":panda_face:", ":tiger:", ":lion:", ":pig:", ":octopus:", ":boar:",
@@ -131,7 +133,7 @@ class Match:
 		match.maps = data['maps']
 		match.state = data['state']
 		match.states = data['states']
-		if match.state == match.CHECK_IN:
+		if match.state == match.READY_CHECK:
 			ctx = bot.SystemContext(qc)
 			await match.check_in.start(ctx)  # Spawn a new check_in message
 
@@ -174,6 +176,7 @@ class Match:
 
 		# Init self sections
 		self.check_in = CheckIn(self, self.cfg['check_in_timeout'])
+		self.map_vote = MapVote(self)
 		self.draft = Draft(self, self.cfg['pick_order'], self.cfg['captains_role_id'])
 		self.embeds = Embeds(self)
 
@@ -236,8 +239,11 @@ class Match:
 		if self.state == self.INIT:
 			await self.next_state(bot.SystemContext(self.qc))
 
-		elif self.state == self.CHECK_IN:
+		elif self.state == self.READY_CHECK:
 			await self.check_in.think(frame_time)
+
+		elif self.state == self.MAP_VOTE:
+			await self.map_vote.think(frame_time)
 
 		elif frame_time > self.lifetime + self.start_time:
 			ctx = bot.SystemContext(self.qc)
@@ -253,8 +259,10 @@ class Match:
 	async def next_state(self, ctx):
 		if len(self.states):
 			self.state = self.states.pop(0)
-			if self.state == self.CHECK_IN:
+			if self.state == self.READY_CHECK:
 				await self.check_in.start(ctx)
+			elif self.state == self.MAP_VOTE:
+				await self.map_vote.start(ctx)
 			elif self.state == self.DRAFT:
 				await self.draft.start(ctx)
 			elif self.state == self.WAITING_REPORT:
