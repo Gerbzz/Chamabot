@@ -255,6 +255,15 @@ class PickupQueue:
 				verify_message="Vote maps number must be between 2 and 9.",
 				description="Set to enable map voting, this requires check-in timeout to be set."
 			),
+			Variables.DurationVar(
+				"map_vote_timeout",
+				display="Map vote timeout",
+				section="Maps",
+				verify=lambda i: 0 < i < 3601,
+				default=60*3,
+				verify_message="Map vote timeout must be less than an hour.",
+				description="Set the map vote stage duration. Default: 3 minutes."
+			),
 			VariableTable(
 				"aliases", display="Aliases", section="General",
 				description="Other names for this queue, you can also group queues by giving them a same alias.",

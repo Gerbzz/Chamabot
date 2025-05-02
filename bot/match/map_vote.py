@@ -16,11 +16,17 @@ class MapVote:
 		self.message = None
 		self.maps = []
 		self.map_votes = []
+		self.timeout = self.m.cfg.get('map_vote_timeout', 60*3)  # Default to 3 minutes if not set
 
 		if len(self.m.cfg['maps']) > 1 and self.m.cfg['vote_maps']:
 			self.maps = self.m.random_maps(self.m.cfg['maps'], self.m.cfg['vote_maps'], self.m.queue.last_maps)
 			self.map_votes = [set() for i in self.maps]
 			self.m.states.append(self.m.MAP_VOTE)
+
+	async def think(self, frame_time):
+		if frame_time > self.m.start_time + self.timeout:
+			ctx = bot.SystemContext(self.m.qc)
+			await self.finish(ctx)
 
 	async def start(self, ctx):
 		if not self.maps:
