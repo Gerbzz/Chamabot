@@ -29,7 +29,7 @@ class Log:
 		if not os.path.exists(os.path.abspath("logs")):
 			os.makedirs('logs')
 
-		self.file = open(datetime.datetime.now().strftime("logs/log_%Y-%m-%d-%H:%M"), 'w')
+		self.file = open(datetime.datetime.now().strftime("logs/log_%Y-%m-%d-%H:%M"), 'w', encoding='utf-8')
 		self.loglevel = LogLevelToInt[cfg.LOG_LEVEL]
 
 	@staticmethod
@@ -42,7 +42,7 @@ class Log:
 		sys.stdout.write("\r\n\033[F\033[K" + string + '\r\n>' + line_buffer)
 
 	def log(self, data, log_level):
-		string = str(data).encode(sys.stdout.encoding, 'ignore').decode(sys.stdout.encoding)
+		string = str(data)
 		string = "{}|{}> {}".format(
 			datetime.datetime.now().strftime("%d.%m.%Y (%H:%M:%S)"),
 			log_level,
