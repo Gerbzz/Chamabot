@@ -701,7 +701,7 @@ async def _set_channel_config(
 		try:
 			# Parse and validate the config
 			config_data = json.loads(config)
-			await ctx.qc.cfg_factory.update(ctx.qc, config_data)
+			await ctx.qc.cfg.update(config_data)
 			await ctx.success(ctx.qc.gt("Channel configuration has been updated."))
 		except json.JSONDecodeError:
 			raise bot.Exc.SyntaxError(ctx.qc.gt("Invalid JSON format."))
