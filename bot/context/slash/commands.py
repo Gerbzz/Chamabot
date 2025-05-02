@@ -694,9 +694,7 @@ async def _set_channel_config(
 ):
 	async def _run(ctx, *args, **kwargs):
 		# Check permissions
-		if not any(role.name in [ctx.guild.get_role(ctx.qc.cfg.admin_role).name, 
-							   ctx.guild.get_role(ctx.qc.cfg.moderator_role).name] 
-				  for role in ctx.author.roles):
+		if not any(role.name in [ctx.qc.cfg.admin_role, ctx.qc.cfg.moderator_role] for role in ctx.author.roles):
 			raise bot.Exc.PermissionError(ctx.qc.gt("You must be an admin or moderator to use this command."))
 
 		try:
