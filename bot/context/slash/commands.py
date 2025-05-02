@@ -4,6 +4,7 @@ from asyncio.exceptions import TimeoutError as aTimeoutError
 from nextcord import Interaction, SlashOption, Member, TextChannel
 import traceback
 import time
+import json
 
 from core.client import dc
 from core.utils import error_embed, ok_embed, parse_duration, get_nick
@@ -65,7 +66,7 @@ async def run_slash_coro(ctx: SlashContext, coro: Callable, **kwargs):
 		await ctx.error(str(e), title="RuntimeError")
 		log.error("\n".join([
 			f"Error processing /slash command {coro.__name__}.",
-			f"QC: {ctx.channel.guild.name}>#{ctx.channel.name} ({qc.id}).",
+			f"QC: {ctx.channel.guild.name}>#{ctx.channel.name} ({ctx.qc.id}).",
 			f"Member: {ctx.author} ({ctx.author.id}).",
 			f"Kwargs: {kwargs}.",
 			f"Exception: {str(e)}. Traceback:\n{traceback.format_exc()}=========="
@@ -692,11 +693,21 @@ async def _set_channel_config(
 	)
 ):
 	async def _run(ctx, *args, **kwargs):
+		# Check permissions
 		if not any(role.name in [ctx.guild.get_role(ctx.qc.cfg.admin_role).name, 
 							   ctx.guild.get_role(ctx.qc.cfg.moderator_role).name] 
 				  for role in ctx.author.roles):
-			raise bot.Exc.PermissionError("You don't have permission to use this command.")
-		await bot.commands.set_qc_cfg(ctx, *args, **kwargs)
+			raise bot.Exc.PermissionError(ctx.qc.gt("You must be an admin or moderator to use this command."))
+
+		try:
+			# Parse and validate the config
+			config_data = json.loads(config)
+			await ctx.qc.cfg_factory.update(ctx.qc, config_data)
+			await ctx.success(ctx.qc.gt("Channel configuration has been updated."))
+		except json.JSONDecodeError:
+			raise bot.Exc.SyntaxError(ctx.qc.gt("Invalid JSON format."))
+		except Exception as e:
+			raise bot.Exc.ValueError(str(e))
 	
 	await run_slash(_run, interaction=interaction, config=config)
 
