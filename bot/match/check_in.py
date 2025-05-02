@@ -12,7 +12,6 @@ class CheckIn:
 
 	READY_EMOJI = "☑"
 	NOT_READY_EMOJI = "⛔"
-	INT_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6⃣", "7⃣", "8⃣", "9⃣"]
 
 	def __init__(self, match, timeout):
 		self.m = match
@@ -26,15 +25,8 @@ class CheckIn:
 		for p in (p for p in self.m.players if p.id in bot.auto_ready.keys()):
 			self.ready_players.add(p)
 
-		if len(self.m.cfg['maps']) > 1 and self.m.cfg['vote_maps']:
-			self.maps = self.m.random_maps(self.m.cfg['maps'], self.m.cfg['vote_maps'], self.m.queue.last_maps)
-			self.map_votes = [set() for i in self.maps]
-		else:
-			self.maps = []
-			self.map_votes = []
-
 		if self.timeout:
-			self.m.states.append(self.m.CHECK_IN)
+			self.m.states.append(self.m.READY_CHECK)
 
 	async def think(self, frame_time):
 		if frame_time > self.m.start_time + self.timeout:
@@ -49,7 +41,6 @@ class CheckIn:
 		self.message = await ctx.channel.send(text)
 
 		emojis = [self.READY_EMOJI, '🔸', self.NOT_READY_EMOJI] if self.allow_discard else [self.READY_EMOJI]
-		emojis += [self.INT_EMOJIS[n] for n in range(len(self.maps))]
 		try:
 			for emoji in emojis:
 				await self.message.add_reaction(emoji)
@@ -96,11 +87,6 @@ class CheckIn:
 	async def finish(self, ctx):
 		bot.waiting_reactions.pop(self.message.id)
 		self.ready_players = set()
-		if len(self.maps):
-			order = list(range(len(self.maps)))
-			random.shuffle(order)
-			order.sort(key=lambda n: len(self.map_votes[n]), reverse=True)
-			self.m.maps = [self.maps[n] for n in order[:self.m.cfg['map_count']]]
 		await self.message.delete()
 
 		for p in (p for p in self.m.players if p.id in bot.auto_ready.keys()):
@@ -109,22 +95,10 @@ class CheckIn:
 		await self.m.next_state(ctx)
 
 	async def process_reaction(self, reaction, user, remove=False):
-		if self.m.state != self.m.CHECK_IN or user not in self.m.players:
+		if self.m.state != self.m.READY_CHECK or user not in self.m.players:
 			return
 
-		if str(reaction) in self.INT_EMOJIS:
-			idx = self.INT_EMOJIS.index(str(reaction))
-			if idx <= len(self.maps):
-				if remove:
-					self.map_votes[idx].discard(user.id)
-					self.ready_players.discard(user)
-				else:
-					self.map_votes[idx].add(user.id)
-					self.discarded_players.discard(user)
-					self.ready_players.add(user)
-				await self.refresh(bot.SystemContext(self.m.queue.qc))
-
-		elif str(reaction) == self.READY_EMOJI:
+		if str(reaction) == self.READY_EMOJI:
 			if remove:
 				self.ready_players.discard(user)
 			else:
@@ -138,8 +112,8 @@ class CheckIn:
 			return await self.discard_member(bot.SystemContext(self.m.queue.qc), user)
 
 	async def set_ready(self, ctx, member, ready):
-		if self.m.state != self.m.CHECK_IN:
-			raise bot.Exc.MatchStateError(self.m.gt("The match is not on the check-in stage."))
+		if self.m.state != self.m.READY_CHECK:
+			raise bot.Exc.MatchStateError(self.m.gt("The match is not on the ready check stage."))
 		if ready:
 			self.ready_players.add(member)
 			self.discarded_players.discard(member)

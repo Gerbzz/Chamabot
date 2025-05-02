@@ -125,8 +125,8 @@ class Draft:
 			await ctx.success(self.m.gt("You are now looking for a substitute."))
 
 	async def sub_for(self, ctx, player1, player2, force=False):
-		if self.m.state not in [self.m.CHECK_IN, self.m.DRAFT, self.m.WAITING_REPORT]:
-			raise bot.Exc.MatchStateError(self.m.gt("The match must be on the check-in, draft or waiting report stage."))
+		if self.m.state not in [self.m.READY_CHECK, self.m.MAP_VOTE, self.m.DRAFT, self.m.WAITING_REPORT]:
+			raise bot.Exc.MatchStateError(self.m.gt("The match must be on the ready check, map vote, draft or waiting report stage."))
 		elif not force and player1 not in self.sub_queue:
 			raise bot.Exc.PermissionError(self.m.gt("Specified player is not looking for a substitute."))
 
@@ -142,8 +142,10 @@ class Draft:
 		await self.m.qc.remove_members(player2, ctx=ctx)
 		await bot.remove_players(player2, reason="pickup started")
 
-		if self.m.state == self.m.CHECK_IN:
+		if self.m.state == self.m.READY_CHECK:
 			await self.m.check_in.refresh()
+		elif self.m.state == self.m.MAP_VOTE:
+			await self.m.map_vote.refresh()
 		elif self.m.state == self.m.WAITING_REPORT:
 			await ctx.notice(embed=self.m.embeds.final_message())
 		else:
