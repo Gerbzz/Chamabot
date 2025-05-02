@@ -726,11 +726,24 @@ async def _set_queue_config(
 	)
 ):
 	async def _run(ctx, *args, **kwargs):
-		if not any(role.name in [ctx.guild.get_role(ctx.qc.cfg.admin_role).name, 
-							   ctx.guild.get_role(ctx.qc.cfg.moderator_role).name] 
-				  for role in ctx.author.roles):
-			raise bot.Exc.PermissionError("You don't have permission to use this command.")
-		await bot.commands.set_queue_cfg(ctx, *args, **kwargs)
+		# Check permissions
+		if not (ctx.author.guild_permissions.administrator or 
+				any(role.name in [ctx.qc.cfg.admin_role, ctx.qc.cfg.moderator_role] for role in ctx.author.roles)):
+			raise bot.Exc.PermissionError(ctx.qc.gt("You must be an admin or moderator to use this command."))
+
+		# Find the queue
+		if (q := find(lambda i: i.name.lower() == queue.lower(), ctx.qc.queues)) is None:
+			raise bot.Exc.SyntaxError(ctx.qc.gt(f"Queue '{queue}' not found on the channel."))
+
+		try:
+			# Parse and validate the config
+			config_data = json.loads(config)
+			await q.cfg.update(config_data)
+			await ctx.success(ctx.qc.gt(f"__{q.name}__ queue configuration has been updated."))
+		except json.JSONDecodeError:
+			raise bot.Exc.SyntaxError(ctx.qc.gt("Invalid JSON format."))
+		except Exception as e:
+			raise bot.Exc.ValueError(str(e))
 	
 	await run_slash(_run, interaction=interaction, queue=queue, config=config)
 _set_queue_config.on_autocomplete("queue")(autocomplete.queues)
