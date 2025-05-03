@@ -25,6 +25,7 @@ class Draft:
 			self.m.states.append(self.m.DRAFT)
 
 	async def start(self, ctx):
+		self.last_pick_time = int(time())
 		await self.refresh(ctx)
 
 	async def print(self, ctx):
@@ -98,6 +99,7 @@ class Draft:
 			)
 			if unpicked_players:
 				await self.pick(bot.SystemContext(self.m.qc), picker_team[0], unpicked_players[0])
+				self.last_pick_time = frame_time  # Update last pick time after auto-pick
 
 	async def pick(self, ctx, captain, player):
 		if self.m.state != self.m.DRAFT:
