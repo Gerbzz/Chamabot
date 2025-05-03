@@ -251,8 +251,8 @@ class PickupQueue:
 				display="Vote poll map count",
 				section="Maps",
 				default=None,
-				verify=lambda n: 2 <= n <= 9,
-				verify_message="Vote maps number must be between 2 and 9.",
+				verify=lambda n: 2 <= n <= 18,
+				verify_message="Vote maps number must be between 2 and 18.",
 				description="Set to enable map voting, this requires check-in timeout to be set."
 			),
 			Variables.DurationVar(
