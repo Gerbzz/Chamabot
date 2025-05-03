@@ -30,7 +30,7 @@ class Draft:
 				self.m.states.append(self.m.DRAFT)
 
 	async def start(self, ctx):
-		self.last_pick_time = int(time())
+		self.last_pick_time = int(time.time())
 		await self.refresh(ctx)
 
 	async def print(self, ctx):
@@ -124,7 +124,7 @@ class Draft:
 		# Add player to the team
 		picker_team.append(player)
 		self.m.teams[2].remove(player)
-		self.last_pick_time = int(time())
+		self.last_pick_time = int(time.time())
 
 		await self.print(ctx)
 
