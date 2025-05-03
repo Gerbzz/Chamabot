@@ -115,8 +115,9 @@ class Draft:
 			raise bot.Exc.MatchStateError(self.m.gt("All picks are done."))
 
 		picker_team = self.m.teams[self.pick_order[pick_step]]
-		if not picker_team or captain not in picker_team:
-			raise bot.Exc.PermissionError(self.m.gt("It's not your turn to pick."))
+		# Only the captain (first member) can pick
+		if not picker_team or captain != picker_team[0]:
+			raise bot.Exc.PermissionError(self.m.gt("It's not your turn to pick. Only the captain can pick."))
 
 		if player not in self.m.teams[2]:
 			raise bot.Exc.ValueError(self.m.gt("Specified player is not available for picking."))
