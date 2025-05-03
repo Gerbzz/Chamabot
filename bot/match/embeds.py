@@ -61,16 +61,23 @@ class Embeds:
 		)
 		embed.add_field(
 			name="—",
-			value="\n".join([
-				self.m.gt("Please vote for your preferred maps by reacting with the corresponding numbers."),
-				"\nMaps:",
-				"\n".join([
-					f" \u200b \u200b {self.m.map_vote.INT_EMOJIS[i]} \u200b {maps[i]} \u200b ({len(map_votes[i])} votes)"
-					for i in range(len(maps))
-				])
-			]),
+			value=self.m.gt("Please vote for your preferred maps by reacting with the corresponding numbers."),
 			inline=False
 		)
+
+		# Split maps into groups of 5 for better readability
+		for i in range(0, len(maps), 5):
+			group_maps = maps[i:i+5]
+			group_votes = map_votes[i:i+5]
+			embed.add_field(
+				name="Maps:",
+				value="\n".join([
+					f" \u200b \u200b {self.m.map_vote.INT_EMOJIS[i+j]} \u200b {group_maps[j]} \u200b ({len(group_votes[j])} votes)"
+					for j in range(len(group_maps))
+				]),
+				inline=False
+			)
+
 		embed.set_footer(**self.footer)
 		return embed
 
