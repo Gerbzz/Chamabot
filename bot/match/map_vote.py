@@ -9,7 +9,12 @@ from core.console import log
 
 class MapVote:
 
-	INT_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6⃣", "7⃣", "8⃣", "9⃣"]
+	INT_EMOJIS = [
+		":chama_icon_1:", ":chama_icon_2:", ":chama_icon_3:", ":chama_icon_4:", ":chama_icon_5:", 
+		":chama_icon_6:", ":chama_icon_7:", ":chama_icon_8:", ":chama_icon_9:", ":chama_icon_10:",
+		":chama_icon_11:", ":chama_icon_12:", ":chama_icon_13:", ":chama_icon_14:", ":chama_icon_15:",
+		":chama_icon_16:", ":chama_icon_17:", ":chama_icon_18:"
+	]
 
 	def __init__(self, match):
 		self.m = match
