@@ -10,10 +10,12 @@ from core.console import log
 class MapVote:
 
 	INT_EMOJIS = [
-		":Chama_icon_1:", ":Chama_icon_2:", ":Chama_icon_3:", ":Chama_icon_4:", ":Chama_icon_5:", 
-		":Chama_icon_6:", ":Chama_icon_7:", ":Chama_icon_8:", ":Chama_icon_9:", ":Chama_icon_10:",
-		":Chama_icon_11:", ":Chama_icon_12:", ":Chama_icon_13:", ":Chama_icon_14:", ":Chama_icon_15:",
-		":Chama_icon_16:", ":Chama_icon_17:", ":Chama_icon_18:"
+		"<:Chama_icon_1:1368097341390983280>", "<:Chama_icon_2:1368097320415268894>", "<:Chama_icon_3:1368097292124426301>", 
+		"<:Chama_icon_4:1368097269802336256>", "<:Chama_icon_5:1368097249006981181>", "<:Chama_icon_6:1368097226152214559>", 
+		"<:Chama_icon_7:1368097203221954621>", "<:Chama_icon_8:1368097172494618684>", "<:Chama_icon_9:1368097150159814819>", 
+		"<:Chama_icon_10:1368097114382536705>", "<:Chama_icon_11:1368097092656173076>", "<:Chama_icon_12:1368096763637923850>", 
+		"<:Chama_icon_13:1368096741789798430>", "<:Chama_icon_14:1368096718150828042>", "<:Chama_icon_15:1368096694679502901>", 
+		"<:Chama_icon_16:1368096590744522752>", "<:Chama_icon_17:1368096572004634705>", "<:Chama_icon_18:1368096550395576340>"
 	]
 
 	def __init__(self, match):

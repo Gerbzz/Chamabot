@@ -23,13 +23,10 @@ class Match:
 	DRAFT = 3
 	WAITING_REPORT = 4
 
-	TEAM_EMOJIS = [
-		":fox:", ":wolf:", ":dog:", ":bear:", ":panda_face:", ":tiger:", ":lion:", ":pig:", ":octopus:", ":boar:",
-		":scorpion:", ":crab:", ":eagle:", ":shark:", ":bat:", ":rhino:", ":dragon_face:", ":deer:"
-	]
+	TEAM_EMOJIS = ["<:chama_ins:1368096502089519124>", "<:chama_sec:1368096529825836451>"]  # Custom server emojis for teams
 
 	default_cfg = dict(
-		teams=None, team_names=['Alpha', 'Beta'], team_emojis=None, ranked=False,
+		teams=None, team_names=['Insurgents', 'Security'], team_emojis=None, ranked=False,
 		team_size=1, pick_captains="no captains", captains_role_id=None, pick_teams="draft",
 		pick_order=None, maps=[], vote_maps=0, map_count=0, check_in_timeout=0,
 		check_in_discard=True, check_in_discard_immediately=True, match_lifetime=3*60*60, start_msg=None, server=None,
