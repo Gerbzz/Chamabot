@@ -22,7 +22,12 @@ class Draft:
 		self.last_pick_time = 0
 
 		if self.m.cfg['pick_teams'] == "draft":
-			self.m.states.append(self.m.DRAFT)
+			# Add DRAFT state after MAP_VOTE state if it exists
+			if self.m.MAP_VOTE in self.m.states:
+				map_vote_index = self.m.states.index(self.m.MAP_VOTE)
+				self.m.states.insert(map_vote_index + 1, self.m.DRAFT)
+			else:
+				self.m.states.append(self.m.DRAFT)
 
 	async def start(self, ctx):
 		self.last_pick_time = int(time())
