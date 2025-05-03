@@ -62,12 +62,12 @@ class PickupQueue:
 			),
 			Variables.DurationVar(
 				"check_in_timeout",
-				display="Require check-in",
+				display="Check-in timeout",
 				section="General",
 				verify=lambda i: 0 < i < 3601,
-				default=60*5,
-				verify_message="Check in timeout must be less than a hour.",
-				description="Set the check-in stage duration."
+				default=90,
+				verify_message="Check-in timeout must be less than an hour.",
+				description="Set the ready check stage duration. Default: 1 minute and 30 seconds."
 			),
 			Variables.BoolVar(
 				"check_in_discard",
@@ -260,9 +260,18 @@ class PickupQueue:
 				display="Map vote timeout",
 				section="Maps",
 				verify=lambda i: 0 < i < 3601,
-				default=60*3,
+				default=90,
 				verify_message="Map vote timeout must be less than an hour.",
-				description="Set the map vote stage duration. Default: 3 minutes."
+				description="Set the map vote stage duration. Default: 1 minute and 30 seconds."
+			),
+			Variables.DurationVar(
+				"draft_timeout",
+				display="Draft timeout",
+				section="Maps",
+				verify=lambda i: 0 < i < 3601,
+				default=30,
+				verify_message="Draft timeout must be less than an hour.",
+				description="Set the draft pick timeout duration. Default: 30 seconds."
 			),
 			VariableTable(
 				"aliases", display="Aliases", section="General",

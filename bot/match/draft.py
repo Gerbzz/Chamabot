@@ -2,6 +2,7 @@
 import bot
 from core.utils import find
 from nextcord import DiscordException
+import time
 
 
 class Draft:
@@ -15,7 +16,10 @@ class Draft:
 		self.m = match
 		self.pick_order = [self.pick_steps[i] for i in pick_order] if pick_order else []
 		self.captains_role_id = captains_role_id
+		self.message = None
 		self.sub_queue = []
+		self.timeout = self.m.cfg.get('draft_timeout', 30)  # Default to 30 seconds if not set
+		self.last_pick_time = 0
 
 		if self.m.cfg['pick_teams'] == "draft":
 			self.m.states.append(self.m.DRAFT)
@@ -67,33 +71,55 @@ class Draft:
 		team.insert(0, author)
 		await self.print(ctx)
 
-	async def pick(self, ctx, author, players):
-		for player in players:
-			pick_step = max(0, (len(self.m.teams[0]) + len(self.m.teams[1]) - 2))
-			picker_team = self.m.teams[self.pick_order[pick_step]] if pick_step < len(self.pick_order) - 1 else None
+	async def think(self, frame_time):
+		if self.m.state != self.m.DRAFT:
+			return
 
-			if self.m.state != self.m.DRAFT:
-				raise bot.Exc.MatchStateError(self.m.gt("The match is not on the draft stage."))
-			elif (team := find(lambda t: author in t[:1], self.m.teams[:2])) is None:
-				raise bot.Exc.PermissionError(self.m.gt("You are not a captain."))
-			elif picker_team is not None and picker_team is not team:
-				raise bot.Exc.PermissionError(self.m.gt("Not your turn to pick."))
-			elif player not in self.m.teams[2]:
-				raise bot.Exc.NotFoundError(self.m.gt("Specified player not in the unpicked list."))
+		if len(self.m.teams[2]) == 0:
+			await self.m.next_state(bot.SystemContext(self.m.qc))
+			return
 
-			self.m.teams[2].remove(player)
-			team.append(player)
+		pick_step = len(self.m.teams[0]) + len(self.m.teams[1]) - 2
+		if pick_step >= len(self.pick_order):
+			await self.m.next_state(bot.SystemContext(self.m.qc))
+			return
 
-			# auto last-pick rest of the players if possible
-			# if rest of pick_order covers the unpicked list
-			if len(self.m.teams[2]) and len(self.pick_order[pick_step+1:]) >= len(self.m.teams[2]):
-				# if rest of pick_order is a single team
-				if len(set(self.pick_order[pick_step+1:])) == 1:
-					picker_team = self.m.teams[self.pick_order[pick_step+1]]
-					picker_team.extend(self.m.teams[2])
-					self.m.teams[2].clear()
+		picker_team = self.m.teams[self.pick_order[pick_step]]
+		if not picker_team:
+			return
 
-		await self.refresh(ctx)
+		# Check if it's time to auto-pick
+		if frame_time > self.last_pick_time + self.timeout:
+			# Sort unpicked players by rating
+			unpicked_players = sorted(
+				self.m.teams[2],
+				key=lambda p: self.m.ratings[p.id],
+				reverse=True
+			)
+			if unpicked_players:
+				await self.pick(bot.SystemContext(self.m.qc), picker_team[0], unpicked_players[0])
+
+	async def pick(self, ctx, captain, player):
+		if self.m.state != self.m.DRAFT:
+			raise bot.Exc.MatchStateError(self.m.gt("The match must be on the draft stage."))
+
+		pick_step = len(self.m.teams[0]) + len(self.m.teams[1]) - 2
+		if pick_step >= len(self.pick_order):
+			raise bot.Exc.MatchStateError(self.m.gt("All picks are done."))
+
+		picker_team = self.m.teams[self.pick_order[pick_step]]
+		if not picker_team or captain not in picker_team:
+			raise bot.Exc.PermissionError(self.m.gt("It's not your turn to pick."))
+
+		if player not in self.m.teams[2]:
+			raise bot.Exc.ValueError(self.m.gt("Specified player is not available for picking."))
+
+		# Add player to the team
+		picker_team.append(player)
+		self.m.teams[2].remove(player)
+		self.last_pick_time = int(time())
+
+		await self.print(ctx)
 
 	async def put(self, ctx, player, team_name):
 		if (team := find(lambda t: t.name.lower() == team_name.lower(), self.m.teams)) is None:
