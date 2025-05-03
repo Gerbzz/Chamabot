@@ -70,7 +70,7 @@ class Embeds:
 			group_maps = maps[i:i+5]
 			group_votes = map_votes[i:i+5]
 			embed.add_field(
-				name="Maps:",
+				name="",  # Empty name instead of separator
 				value="\n".join([
 					f" \u200b \u200b {self.m.map_vote.INT_EMOJIS[i+j]} \u200b {group_maps[j]} \u200b ({len(group_votes[j])} votes)"
 					for j in range(len(group_maps))
