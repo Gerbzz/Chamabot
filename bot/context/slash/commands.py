@@ -759,8 +759,32 @@ async def _view_config(
 	)
 ):
 	async def _run(ctx, *args, **kwargs):
-		await bot.commands.cfg_qc(ctx, *args, **kwargs)
-	
-	await run_slash(_run, interaction=interaction, queue=queue)
+		if queue:
+			# View queue configuration
+			await bot.commands.cfg_queue(ctx, queue)
+		else:
+			# View channel configuration
+			await bot.commands.cfg_qc(ctx)
+	await run_slash(_run, interaction=interaction)
 _view_config.on_autocomplete("queue")(autocomplete.queues)
+
+
+@dc.slash_command(name='_run', description='Run a command', **guild_kwargs)
+async def _run(
+	interaction: Interaction,
+	queue: str = SlashOption(
+		name="queue",
+		description="Name of the queue to run command on",
+		required=False
+	)
+):
+	async def _run(ctx, *args, **kwargs):
+		if queue:
+			# Run command on specific queue
+			await bot.commands.cfg_queue(ctx, queue)
+		else:
+			# Run command on channel
+			await bot.commands.cfg_qc(ctx)
+	await run_slash(_run, interaction=interaction)
+_run.on_autocomplete("queue")(autocomplete.queues)
 
