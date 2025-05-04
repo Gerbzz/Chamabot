@@ -4,7 +4,11 @@ from core.utils import find
 from nextcord import DiscordException
 import time
 import traceback
+import logging
 
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 class Draft:
 
@@ -84,28 +88,35 @@ class Draft:
 
 	async def think(self, frame_time):
 		if self.m.state != self.m.DRAFT:
+			logger.debug(f"Match {self.m.id} not in draft state, skipping draft think")
 			return
 
 		if len(self.m.teams[2]) == 0:
+			logger.debug(f"Match {self.m.id} no players left to pick, ending draft")
 			await self.m.next_state(bot.SystemContext(self.m.qc))
 			return
 
 		pick_step = len(self.m.teams[0]) + len(self.m.teams[1]) - 2
 		if pick_step >= len(self.pick_order):
+			logger.debug(f"Match {self.m.id} all picks completed, ending draft")
 			await self.m.next_state(bot.SystemContext(self.m.qc))
 			return
 
 		picker_team = self.m.teams[self.pick_order[pick_step]]
-		if not picker_team:
+		if not picker_team or not picker_team[0]:
+			logger.debug(f"Match {self.m.id} no valid picker team or captain")
 			return
 
 		current_time = int(time.time())
 		time_elapsed = current_time - self.last_pick_time
 		time_remaining = self.timeout - time_elapsed
 		
+		logger.debug(f"Match {self.m.id} draft state: pick_step={pick_step}, time_elapsed={time_elapsed}, time_remaining={time_remaining}")
+		
 		# Send warning 10 seconds before auto-pick
 		if not self.auto_pick_warning_sent and time_remaining <= self.warning_time and time_remaining > 0:
 			try:
+				logger.debug(f"Match {self.m.id} sending auto-pick warning to {picker_team[0].name}")
 				await bot.SystemContext(self.m.qc).notice(
 					self.m.gt("{captain} you have {time} seconds to pick a player, or the highest rated player will be auto-picked.").format(
 						captain=picker_team[0].mention,
@@ -114,32 +125,48 @@ class Draft:
 				)
 				self.auto_pick_warning_sent = True
 			except Exception as e:
-				log.error(f"Error sending auto-pick warning: {str(e)}")
+				logger.error(f"Match {self.m.id} error sending auto-pick warning: {str(e)}")
 
 		# Check if it's time to auto-pick
 		if time_elapsed >= self.timeout:
-			# Sort unpicked players by rating
-			unpicked_players = sorted(
-				self.m.teams[2],
-				key=lambda p: self.m.ratings[p.id],
-				reverse=True
-			)
-			if unpicked_players:
-				try:
+			try:
+				logger.debug(f"Match {self.m.id} auto-pick triggered for {picker_team[0].name}")
+				# Sort unpicked players by rating
+				unpicked_players = sorted(
+					self.m.teams[2],
+					key=lambda p: self.m.ratings[p.id],
+					reverse=True
+				)
+				
+				if unpicked_players:
+					logger.debug(f"Match {self.m.id} auto-picking {unpicked_players[0].name} for {picker_team.name}")
+					# Auto-pick the highest rated player
 					await self.pick(bot.SystemContext(self.m.qc), picker_team[0], unpicked_players[0])
+					
+					# Reset timers
 					self.last_pick_time = current_time
 					self.auto_pick_warning_sent = False
+					
+					# Notify about auto-pick
 					await bot.SystemContext(self.m.qc).notice(
 						self.m.gt("{player} was auto-picked for {team} due to timeout.").format(
 							player=unpicked_players[0].mention,
 							team=picker_team.name
 						)
 					)
-				except Exception as e:
-					log.error(f"Error during auto-pick: {str(e)}\n{traceback.format_exc()}")
-					# If auto-pick fails, try to continue the draft
-					self.last_pick_time = current_time
-					self.auto_pick_warning_sent = False
+					
+					# Refresh the draft state
+					await self.refresh(bot.SystemContext(self.m.qc))
+				else:
+					logger.debug(f"Match {self.m.id} no players available for auto-pick")
+					# No players left to pick, move to next state
+					await self.m.next_state(bot.SystemContext(self.m.qc))
+					
+			except Exception as e:
+				logger.error(f"Match {self.m.id} error during auto-pick: {str(e)}\n{traceback.format_exc()}")
+				# If auto-pick fails, try to continue the draft
+				self.last_pick_time = current_time
+				self.auto_pick_warning_sent = False
 
 	async def pick(self, ctx, captain, player):
 		if self.m.state != self.m.DRAFT:

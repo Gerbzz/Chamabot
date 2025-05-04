@@ -4,11 +4,16 @@ from itertools import combinations
 import random
 from nextcord import DiscordException
 import traceback
+import logging
 
 import bot
 from core.utils import find, get, iter_to_dict, join_and, get_nick
 from core.console import log
 from core.client import dc
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 from .check_in import CheckIn
 from .draft import Draft
@@ -31,7 +36,7 @@ class Match:
 		team_size=1, pick_captains="no captains", captains_role_id=None, pick_teams="draft",
 		pick_order=None, maps=[], vote_maps=0, map_count=0, check_in_timeout=0,
 		check_in_discard=True, check_in_discard_immediately=True, match_lifetime=3*60*60, start_msg=None, server=None,
-		show_streamers=True
+		show_streamers=True, draft_timeout=30  # Default draft timeout in seconds
 	)
 
 	class Team(list):
@@ -234,13 +239,21 @@ class Match:
 
 	async def think(self, frame_time):
 		try:
+			logger.debug(f"Match {self.id} thinking in state {self.state}")
 			if self.state == self.INIT:
+				logger.debug(f"Match {self.id} transitioning from INIT state")
 				await self.next_state(bot.SystemContext(self.qc))
 			elif self.state == self.READY_CHECK:
+				logger.debug(f"Match {self.id} in READY_CHECK state")
 				await self.check_in.think(frame_time)
 			elif self.state == self.MAP_VOTE:
+				logger.debug(f"Match {self.id} in MAP_VOTE state")
 				await self.map_vote.think(frame_time)
+			elif self.state == self.DRAFT:
+				logger.debug(f"Match {self.id} in DRAFT state")
+				await self.draft.think(frame_time)
 			elif frame_time > self.lifetime + self.start_time:
+				logger.warning(f"Match {self.id} has timed out")
 				ctx = bot.SystemContext(self.qc)
 				try:
 					await ctx.error(self.gt("Match {queue} ({id}) has timed out.").format(
@@ -251,24 +264,26 @@ class Match:
 					pass
 				await self.cancel(ctx)
 		except bot.Exc.MatchStateError as e:
-			log.error(f"Match {self.id} state error: {str(e)}")
+			logger.error(f"Match {self.id} state error: {str(e)}")
 			await self.cancel(bot.SystemContext(self.qc))
 		except bot.Exc.PermissionError as e:
-			log.error(f"Match {self.id} permission error: {str(e)}")
+			logger.error(f"Match {self.id} permission error: {str(e)}")
 			await self.cancel(bot.SystemContext(self.qc))
 		except Exception as e:
-			log.error(f"Match {self.id} unexpected error: {str(e)}\n{traceback.format_exc()}")
+			logger.error(f"Match {self.id} unexpected error: {str(e)}\n{traceback.format_exc()}")
 			await self.cancel(bot.SystemContext(self.qc))
 
 	async def next_state(self, ctx):
 		try:
 			if not self.states:
+				logger.debug(f"Match {self.id} has no more states, finishing match")
 				if self.state != self.WAITING_REPORT:
 					await self.final_message(ctx)
 				await self.finish_match(ctx)
 				return
 
 			next_state = self.states[0]
+			logger.debug(f"Match {self.id} transitioning from state {self.state} to {next_state}")
 			
 			# Validate state transition
 			valid_transitions = {
@@ -280,6 +295,8 @@ class Match:
 			}
 			
 			if next_state not in valid_transitions.get(self.state, []):
+				error_msg = f"Invalid state transition from {self.state} to {next_state}"
+				logger.error(f"Match {self.id}: {error_msg}")
 				raise bot.Exc.MatchStateError(
 					self.gt("Invalid state transition from {current} to {next}").format(
 						current=self.state,
@@ -288,18 +305,23 @@ class Match:
 				)
 
 			self.state = self.states.pop(0)
+			logger.debug(f"Match {self.id} new state: {self.state}")
 			
 			if self.state == self.READY_CHECK:
+				logger.debug(f"Match {self.id} starting ready check")
 				await self.check_in.start(ctx)
 			elif self.state == self.MAP_VOTE:
+				logger.debug(f"Match {self.id} starting map vote")
 				await self.map_vote.start(ctx)
 			elif self.state == self.DRAFT:
+				logger.debug(f"Match {self.id} starting draft")
 				await self.draft.start(ctx)
 			elif self.state == self.WAITING_REPORT:
+				logger.debug(f"Match {self.id} starting waiting report")
 				await self.start_waiting_report(ctx)
 			
 		except Exception as e:
-			log.error(f"Error during state transition in match {self.id}: {str(e)}\n{traceback.format_exc()}")
+			logger.error(f"Error during state transition in match {self.id}: {str(e)}\n{traceback.format_exc()}")
 			await self.cancel(ctx)
 
 	def rank_str(self, member):
