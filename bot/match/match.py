@@ -29,7 +29,7 @@ class Match:
 	DRAFT = 3
 	WAITING_REPORT = 4
 
-	TEAM_EMOJIS = ["<:chama_ins:1368096502089519124>", "<:chama_sec:1368096529825836451>"]  # Custom server emojis for teams
+	TEAM_EMOJIS = ["<:chama_ins:1368096502089519124>", "<:chama_sec:1368096529285386451>"]  # Custom server emojis for teams
 
 	default_cfg = dict(
 		teams=None, team_names=['Insurgents', 'Security'], team_emojis=None, ranked=False,
