@@ -3,6 +3,7 @@ from time import time
 from itertools import combinations
 import random
 from nextcord import DiscordException
+import traceback
 
 import bot
 from core.utils import find, get, iter_to_dict, join_and, get_nick
@@ -57,7 +58,6 @@ class Match:
 
 	@classmethod
 	async def new(cls, ctx, queue, players, **kwargs):
-		# Create the Match object
 		ratings = {p['user_id']: p['rating'] for p in await ctx.qc.rating.get_players((p.id for p in players))}
 		match_id = await bot.stats.next_match()
 		match = cls(match_id, queue, ctx.qc, players, ratings, **kwargs)
@@ -233,29 +233,62 @@ class Match:
 			self.teams[2].set([p for p in self.players if p not in [*self.teams[0], *self.teams[1]]])
 
 	async def think(self, frame_time):
-		if self.state == self.INIT:
-			await self.next_state(bot.SystemContext(self.qc))
-
-		elif self.state == self.READY_CHECK:
-			await self.check_in.think(frame_time)
-
-		elif self.state == self.MAP_VOTE:
-			await self.map_vote.think(frame_time)
-
-		elif frame_time > self.lifetime + self.start_time:
-			ctx = bot.SystemContext(self.qc)
-			try:
-				await ctx.error(self.gt("Match {queue} ({id}) has timed out.").format(
-					queue=self.queue.name,
-					id=self.id
-				))
-			except DiscordException:
-				pass
-			await self.cancel(ctx)
+		try:
+			if self.state == self.INIT:
+				await self.next_state(bot.SystemContext(self.qc))
+			elif self.state == self.READY_CHECK:
+				await self.check_in.think(frame_time)
+			elif self.state == self.MAP_VOTE:
+				await self.map_vote.think(frame_time)
+			elif frame_time > self.lifetime + self.start_time:
+				ctx = bot.SystemContext(self.qc)
+				try:
+					await ctx.error(self.gt("Match {queue} ({id}) has timed out.").format(
+						queue=self.queue.name,
+						id=self.id
+					))
+				except DiscordException:
+					pass
+				await self.cancel(ctx)
+		except bot.Exc.MatchStateError as e:
+			log.error(f"Match {self.id} state error: {str(e)}")
+			await self.cancel(bot.SystemContext(self.qc))
+		except bot.Exc.PermissionError as e:
+			log.error(f"Match {self.id} permission error: {str(e)}")
+			await self.cancel(bot.SystemContext(self.qc))
+		except Exception as e:
+			log.error(f"Match {self.id} unexpected error: {str(e)}\n{traceback.format_exc()}")
+			await self.cancel(bot.SystemContext(self.qc))
 
 	async def next_state(self, ctx):
-		if len(self.states):
+		try:
+			if not self.states:
+				if self.state != self.WAITING_REPORT:
+					await self.final_message(ctx)
+				await self.finish_match(ctx)
+				return
+
+			next_state = self.states[0]
+			
+			# Validate state transition
+			valid_transitions = {
+				self.INIT: [self.READY_CHECK, self.MAP_VOTE, self.DRAFT],
+				self.READY_CHECK: [self.MAP_VOTE, self.DRAFT, self.WAITING_REPORT],
+				self.MAP_VOTE: [self.DRAFT, self.WAITING_REPORT],
+				self.DRAFT: [self.WAITING_REPORT],
+				self.WAITING_REPORT: []
+			}
+			
+			if next_state not in valid_transitions.get(self.state, []):
+				raise bot.Exc.MatchStateError(
+					self.gt("Invalid state transition from {current} to {next}").format(
+						current=self.state,
+						next=next_state
+					)
+				)
+
 			self.state = self.states.pop(0)
+			
 			if self.state == self.READY_CHECK:
 				await self.check_in.start(ctx)
 			elif self.state == self.MAP_VOTE:
@@ -264,10 +297,10 @@ class Match:
 				await self.draft.start(ctx)
 			elif self.state == self.WAITING_REPORT:
 				await self.start_waiting_report(ctx)
-		else:
-			if self.state != self.WAITING_REPORT:
-				await self.final_message(ctx)
-			await self.finish_match(ctx)
+			
+		except Exception as e:
+			log.error(f"Error during state transition in match {self.id}: {str(e)}\n{traceback.format_exc()}")
+			await self.cancel(ctx)
 
 	def rank_str(self, member):
 		return self.queue.qc.rating_rank(self.ratings[member.id])['rank']
@@ -397,12 +430,55 @@ class Match:
 		return f"> *({self.id})* **{self.queue.name}** | `{join_and([get_nick(p) for p in self.players])}`"
 
 	async def cancel(self, ctx):
-		if self.check_in.message and self.check_in.message.id in bot.waiting_reactions.keys():
-			bot.waiting_reactions.pop(self.check_in.message.id)
 		try:
-			await ctx.notice(
-				self.gt("{players} your match has been canceled.").format(players=join_and([p.mention for p in self.players]))
-			)
-		except DiscordException:
-			pass
-		bot.active_matches.remove(self)
+			# Clean up check-in message and reactions
+			if self.check_in.message and self.check_in.message.id in bot.waiting_reactions:
+				bot.waiting_reactions.pop(self.check_in.message.id)
+				try:
+					await self.check_in.message.delete()
+				except DiscordException:
+					pass
+
+			# Clean up map vote message if exists
+			if hasattr(self, 'map_vote') and self.map_vote.message:
+				try:
+					await self.map_vote.message.delete()
+				except DiscordException:
+					pass
+
+			# Clean up draft message if exists
+			if hasattr(self, 'draft') and self.draft.message:
+				try:
+					await self.draft.message.delete()
+				except DiscordException:
+					pass
+
+			# Notify players
+			try:
+				await ctx.notice(
+					self.gt("{players} your match has been canceled.").format(players=join_and([p.mention for p in self.players]))
+				)
+			except DiscordException:
+				pass
+
+			# Remove from active matches
+			if self in bot.active_matches:
+				bot.active_matches.remove(self)
+
+			# Clean up any remaining references
+			self.check_in = None
+			self.map_vote = None
+			self.draft = None
+			self.embeds = None
+
+		except Exception as e:
+			log.error(f"Error during match {self.id} cancellation: {str(e)}\n{traceback.format_exc()}")
+			# Ensure match is removed from active matches even if cleanup fails
+			if self in bot.active_matches:
+				bot.active_matches.remove(self)
+
+	async def add_member(self, ctx, member):
+		for match in bot.active_matches:
+			if member in match.players:
+				return bot.Qr.Duplicate
+		# ...rest of your add_member logic...

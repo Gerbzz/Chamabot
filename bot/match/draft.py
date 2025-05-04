@@ -3,6 +3,7 @@ import bot
 from core.utils import find
 from nextcord import DiscordException
 import time
+import traceback
 
 
 class Draft:
@@ -18,8 +19,11 @@ class Draft:
 		self.captains_role_id = captains_role_id
 		self.message = None
 		self.sub_queue = []
-		self.timeout = self.m.cfg.get('draft_timeout', 30)  # Default to 30 seconds if not set
+		# Get draft timeout from match config, default to 30 seconds if not set
+		self.timeout = self.m.cfg.get('draft_timeout', 30)
 		self.last_pick_time = 0
+		self.auto_pick_warning_sent = False
+		self.warning_time = 10  # Seconds before auto-pick to show warning
 
 		if self.m.cfg['pick_teams'] == "draft":
 			# Add DRAFT state after MAP_VOTE state if it exists
@@ -31,6 +35,7 @@ class Draft:
 
 	async def start(self, ctx):
 		self.last_pick_time = int(time.time())
+		self.auto_pick_warning_sent = False
 		await self.refresh(ctx)
 
 	async def print(self, ctx):
@@ -94,8 +99,25 @@ class Draft:
 		if not picker_team:
 			return
 
+		current_time = int(time.time())
+		time_elapsed = current_time - self.last_pick_time
+		time_remaining = self.timeout - time_elapsed
+		
+		# Send warning 10 seconds before auto-pick
+		if not self.auto_pick_warning_sent and time_remaining <= self.warning_time and time_remaining > 0:
+			try:
+				await bot.SystemContext(self.m.qc).notice(
+					self.m.gt("{captain} you have {time} seconds to pick a player, or the highest rated player will be auto-picked.").format(
+						captain=picker_team[0].mention,
+						time=time_remaining
+					)
+				)
+				self.auto_pick_warning_sent = True
+			except Exception as e:
+				log.error(f"Error sending auto-pick warning: {str(e)}")
+
 		# Check if it's time to auto-pick
-		if frame_time > self.last_pick_time + self.timeout:
+		if time_elapsed >= self.timeout:
 			# Sort unpicked players by rating
 			unpicked_players = sorted(
 				self.m.teams[2],
@@ -103,8 +125,21 @@ class Draft:
 				reverse=True
 			)
 			if unpicked_players:
-				await self.pick(bot.SystemContext(self.m.qc), picker_team[0], unpicked_players[0])
-				self.last_pick_time = frame_time  # Update last pick time after auto-pick
+				try:
+					await self.pick(bot.SystemContext(self.m.qc), picker_team[0], unpicked_players[0])
+					self.last_pick_time = current_time
+					self.auto_pick_warning_sent = False
+					await bot.SystemContext(self.m.qc).notice(
+						self.m.gt("{player} was auto-picked for {team} due to timeout.").format(
+							player=unpicked_players[0].mention,
+							team=picker_team.name
+						)
+					)
+				except Exception as e:
+					log.error(f"Error during auto-pick: {str(e)}\n{traceback.format_exc()}")
+					# If auto-pick fails, try to continue the draft
+					self.last_pick_time = current_time
+					self.auto_pick_warning_sent = False
 
 	async def pick(self, ctx, captain, player):
 		if self.m.state != self.m.DRAFT:
@@ -126,6 +161,7 @@ class Draft:
 		picker_team.append(player)
 		self.m.teams[2].remove(player)
 		self.last_pick_time = int(time.time())
+		self.auto_pick_warning_sent = False
 
 		await self.print(ctx)
 

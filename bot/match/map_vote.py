@@ -2,6 +2,7 @@
 import random
 import bot
 from nextcord.errors import DiscordException
+import time
 
 from core.utils import join_and
 from core.console import log
@@ -23,7 +24,8 @@ class MapVote:
 		self.message = None
 		self.maps = []
 		self.map_votes = []
-		self.timeout = self.m.cfg.get('map_vote_timeout', 60*3)  # Default to 3 minutes if not set
+		self.timeout = self.m.cfg.get('map_vote_timeout', 90)  # Default to 90 seconds if not set
+		self.start_time = 0
 
 		if len(self.m.cfg['maps']) > 1 and self.m.cfg['vote_maps']:
 			self.maps = self.m.random_maps(self.m.cfg['maps'], self.m.cfg['vote_maps'], self.m.queue.last_maps)
@@ -31,11 +33,15 @@ class MapVote:
 			self.m.states.append(self.m.MAP_VOTE)
 
 	async def think(self, frame_time):
-		if frame_time > self.m.start_time + self.timeout:
+		current_time = int(time.time())
+		time_elapsed = current_time - self.start_time
+		
+		if time_elapsed >= self.timeout:
 			ctx = bot.SystemContext(self.m.qc)
 			await self.finish(ctx)
 
 	async def start(self, ctx):
+		self.start_time = int(time.time())
 		if not self.maps:
 			await self.m.next_state(ctx)
 			return
@@ -72,14 +78,19 @@ class MapVote:
 				await self.refresh(bot.SystemContext(self.m.queue.qc))
 
 	async def finish(self, ctx):
+		# Count votes and select the map with most votes
+		vote_counts = [len(votes) for votes in self.map_votes]
+		max_votes = max(vote_counts)
+		winning_maps = [self.maps[i] for i, count in enumerate(vote_counts) if count == max_votes]
+		
+		# If there's a tie, randomly select one of the winning maps
+		self.m.maps = [random.choice(winning_maps)]
+		
+		# Clean up the message
 		if self.message:
-			bot.waiting_reactions.pop(self.message.id)
-			await self.message.delete()
-
-		if self.maps:
-			order = list(range(len(self.maps)))
-			random.shuffle(order)
-			order.sort(key=lambda n: len(self.map_votes[n]), reverse=True)
-			self.m.maps = [self.maps[n] for n in order[:self.m.cfg['map_count']]]
-
+			try:
+				await self.message.delete()
+			except DiscordException:
+				pass
+		
 		await self.m.next_state(ctx) 
