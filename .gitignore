@@ -1,0 +1,6 @@
+.qodo
+config.cfg
+*.cfg
+.env
+__pycache__/
+*.pyc
