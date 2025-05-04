@@ -162,7 +162,8 @@ class Match:
 		self.scores = [0, 0]
 
 		team_names = self.cfg['team_names']
-		team_emojis = self.cfg['team_emojis'] or random.sample(self.TEAM_EMOJIS, 2)
+		# Use the predefined TEAM_EMOJIS instead of the config value
+		team_emojis = self.TEAM_EMOJIS
 		self.teams = [
 			self.Team(name=team_names[0], emoji=team_emojis[0], idx=0),
 			self.Team(name=team_names[1], emoji=team_emojis[1], idx=1),
