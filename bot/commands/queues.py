@@ -1,11 +1,11 @@
 __all__ = [
 	'add', 'remove', 'who', 'add_player', 'remove_player', 'promote', 'start', 'split',
-	'reset', 'subscribe', 'server', 'maps'
+	'reset', 'subscribe', 'server', 'maps', 'queue_embed'
 ]
 
 import time
 from random import choice
-from nextcord import Member
+from nextcord import Member, Embed, Button, ButtonStyle, ActionRow
 from core.utils import error_embed, join_and, find, seconds_to_str
 import bot
 
@@ -231,3 +231,97 @@ async def maps(ctx, queue: str, one: bool = False):
 			", ".join((f"`{i['name']}`" for i in q.cfg.maps)),
 			title=ctx.qc.gt("Maps for **{queue}**").format(queue=q.name)
 		)
+
+
+async def _handle_queue_button(interaction, queue_name, ctx):
+	"""Handle button interactions for queue embeds"""
+	q = find(lambda i: i.name.lower() == queue_name.lower(), ctx.qc.queues)
+	if not q:
+		return
+
+	if interaction.custom_id == f"join_{queue_name}":
+		resp = await q.add_member(ctx, interaction.user)
+		if resp == bot.Qr.Success:
+			await ctx.qc.update_expire(interaction.user)
+			await interaction.response.send_message("You have joined the queue!", ephemeral=True)
+		elif resp == bot.Qr.QueueStarted:
+			await interaction.response.send_message("Queue started!", ephemeral=True)
+		else:
+			await interaction.response.send_message(f"Could not join queue: {resp.__name__}", ephemeral=True)
+	elif interaction.custom_id == f"leave_{queue_name}":
+		if interaction.user in q.queue:
+			q.pop_members(interaction.user)
+			if not any((q.is_added(interaction.user) for q in ctx.qc.queues)):
+				bot.expire.cancel(ctx.qc, interaction.user)
+			await interaction.response.send_message("You have left the queue!", ephemeral=True)
+		else:
+			await interaction.response.send_message("You are not in this queue!", ephemeral=True)
+	
+	# Update the embed
+	await queue_embed(ctx, queue_name)
+
+async def queue_embed(ctx, queue_name: str):
+	"""Create or update a queue embed with join/leave buttons"""
+	# Find the queue
+	if (q := find(lambda i: i.name.lower() == queue_name.lower(), ctx.qc.queues)) is None:
+		raise bot.Exc.SyntaxError(f"Queue '{queue_name}' not found on the channel.")
+
+	# Create the embed
+	embed = Embed(
+		title=f"{queue_name} Queue",
+		description="Current queued players:",
+		color=0x7289DA
+	)
+
+	# Add queued players to embed
+	if len(q.queue):
+		embed.add_field(
+			name="Players",
+			value="\n".join([f"• {player.display_name}" for player in q.queue]),
+			inline=False
+		)
+	else:
+		embed.add_field(
+			name="Players",
+			value="No players in queue",
+			inline=False
+		)
+
+	# Create buttons
+	join_button = Button(
+		style=ButtonStyle.green,
+		label="Join",
+		custom_id=f"join_{queue_name}"
+	)
+	leave_button = Button(
+		style=ButtonStyle.red,
+		label="Leave",
+		custom_id=f"leave_{queue_name}"
+	)
+
+	# Create action row
+	action_row = ActionRow(join_button, leave_button)
+
+	# Check if we already have an embed for this queue
+	if hasattr(ctx.qc, 'queue_embeds') and queue_name in ctx.qc.queue_embeds:
+		try:
+			# Try to edit existing message
+			message = await ctx.channel.fetch_message(ctx.qc.queue_embeds[queue_name])
+			await message.edit(embed=embed, components=[action_row])
+			return
+		except:
+			# If message not found, we'll create a new one
+			pass
+
+	# Send new embed
+	message = await ctx.channel.send(embed=embed, components=[action_row])
+	
+	# Store message ID
+	if not hasattr(ctx.qc, 'queue_embeds'):
+		ctx.qc.queue_embeds = {}
+	ctx.qc.queue_embeds[queue_name] = message.id
+
+	# Add button callback
+	if not hasattr(ctx.qc, 'button_callbacks'):
+		ctx.qc.button_callbacks = {}
+	ctx.qc.button_callbacks[queue_name] = lambda i: _handle_queue_button(i, queue_name, ctx)

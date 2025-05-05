@@ -788,3 +788,15 @@ async def _run(
 	await run_slash(_run, interaction=interaction)
 _run.on_autocomplete("queue")(autocomplete.queues)
 
+
+@dc.slash_command(name='queue-embed', description='Create or update a queue embed with join/leave buttons', **guild_kwargs)
+async def _queue_embed(
+	interaction: Interaction,
+	queue_name: str = SlashOption(
+		name="queue_name",
+		description="Name of the queue to create embed for",
+		required=True
+	)
+): await run_slash(bot.commands.queue_embed, interaction=interaction, queue_name=queue_name)
+_queue_embed.on_autocomplete("queue_name")(autocomplete.queues)
+
