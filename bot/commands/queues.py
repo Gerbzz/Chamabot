@@ -289,13 +289,14 @@ async def queue_embed(ctx, queue_name: str):
 
 	# Create buttons
 	join_button = Button(
-		custom_id=f"join_{queue_name}",
 		emoji="✅"
 	)
+	join_button.custom_id = f"join_{queue_name}"
+	
 	leave_button = Button(
-		custom_id=f"leave_{queue_name}",
 		emoji="❌"
 	)
+	leave_button.custom_id = f"leave_{queue_name}"
 
 	# Create action row
 	action_row = ActionRow(join_button, leave_button)
