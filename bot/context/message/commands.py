@@ -7,6 +7,7 @@ from core.console import log
 from core.utils import get_nick, parse_duration
 
 import bot
+from bot.commands.queues import update_queue_embed, update_global_queue_embed
 
 from . import MessageContext
 
@@ -68,11 +69,19 @@ async def on_message(message):
 				# For ++, update all default queues
 				if message.content == "++":
 					for q in [q for q in qc.queues if q.cfg.is_default]:
-						await update_queue_embed(message.channel, q.name)
+						# Create a context object for the queue embed functions
+						queue_ctx = MessageContext(qc, message)
+						await update_queue_embed(queue_ctx, q.name)
+						# Also update any global queue embeds (only needs channel)
+						await update_global_queue_embed(message.channel, q.name)
 				# For --, update all queues the user was in
 				else:
 					for q in [q for q in qc.queues if q.is_added(message.author)]:
-						await update_queue_embed(message.channel, q.name)
+						# Create a context object for the queue embed functions
+						queue_ctx = MessageContext(qc, message)
+						await update_queue_embed(queue_ctx, q.name)
+						# Also update any global queue embeds (only needs channel)
+						await update_global_queue_embed(message.channel, q.name)
 						
 		except bot.Exc.PubobotException as e:
 			await ctx.error(str(e), title=e.__class__.__name__)

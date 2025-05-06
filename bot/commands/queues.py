@@ -973,13 +973,20 @@ async def update_global_queue_embed(channel, queue_name):
 		# Get the queue channel
 		qc = bot.queue_channels.get(channel.id)
 		if not qc:
-			print(f"❌ Could not find queue channel for {channel.id}")
 			return
 
 		# Get the queue
 		q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
 		if not q:
-			print(f"❌ Could not find queue {queue_name}")
+			return
+
+		# Check if there's a global embed for this queue in this channel
+		channel_key = f"global_{queue_name}_{channel.id}"
+		print(f"🔍 Looking for global embed with key: {channel_key}")
+		
+		if channel_key not in global_queue_embeds:
+			# Print all available global embeds keys for debugging
+			print(f"📋 Available global embed keys: {list(global_queue_embeds.keys())}")
 			return
 
 		# Create the embed
@@ -1011,22 +1018,19 @@ async def update_global_queue_embed(channel, queue_name):
 		# Add footer with timestamp
 		embed.set_footer(text=f"Last updated: {time.strftime('%H:%M:%S')} • Silent Mode")
 		
-		# Get the message ID for this channel and queue
-		channel_key = f"global_{queue_name}_{channel.id}"
-		
-		if channel_key in global_queue_embeds:
-			# Update existing message
-			try:
-				message_id = global_queue_embeds[channel_key]
-				message = await channel.fetch_message(message_id)
-				await message.edit(embed=embed)
-				print(f"✅ Updated global queue embed for {queue_name}")
-				return
-			except Exception as e:
-				print(f"❌ Error updating global queue embed: {str(e)}")
-				# If we can't update, we'll create a new one below
-		
-		print(f"❌ No global queue embed found for {queue_name} or update failed")
+		# Update existing message
+		try:
+			message_id = global_queue_embeds[channel_key]
+			print(f"✅ Found message ID {message_id} for key {channel_key}")
+			message = await channel.fetch_message(message_id)
+			await message.edit(embed=embed)
+			print(f"✅ Updated global queue embed for {queue_name}")
+			return
+		except Exception as e:
+			print(f"❌ Error updating global queue embed: {str(e)}")
+			# Remove the key if the message doesn't exist anymore
+			del global_queue_embeds[channel_key]
+			save_global_queue_data()
 	except Exception as e:
 		print(f"❌ Error in update_global_queue_embed: {str(e)}")
 
