@@ -6,6 +6,7 @@ __all__ = [
 import time
 from random import choice
 from nextcord import Member, Embed, Button, ButtonStyle, ActionRow
+from nextcord.ui import Button, ButtonStyle
 from core.utils import error_embed, join_and, find, seconds_to_str
 import bot
 
@@ -289,12 +290,12 @@ async def queue_embed(ctx, queue_name: str):
 
 	# Create buttons
 	join_button = Button(
-		button_style=ButtonStyle.green,
+		style=ButtonStyle.green,
 		custom_id=f"join_{queue_name}",
 		emoji="✅"
 	)
 	leave_button = Button(
-		button_style=ButtonStyle.red,
+		style=ButtonStyle.red,
 		custom_id=f"leave_{queue_name}",
 		emoji="❌"
 	)
