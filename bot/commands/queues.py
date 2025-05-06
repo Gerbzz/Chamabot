@@ -21,18 +21,21 @@ queue_embeds = {}  # Store queue embeds
 async def update_queue_embed(channel, queue_name: str):
 	"""Update the queue embed with current players"""
 	try:
-		# Get the queue
+		# Get the queue channel and queue
 		qc = bot.queue_channels.get(channel.id)
 		if not qc:
+			print(f"❌ No queue channel found for channel {channel.id}")
 			return
 			
 		q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
 		if not q:
+			print(f"❌ Queue {queue_name} not found")
 			return
 			
 		# Get the view
-		view = queue_views.get(queue_name)
+		view = qc.queue_views.get(queue_name)
 		if not view:
+			print(f"❌ No view found for queue {queue_name}")
 			return
 			
 		# Create new embed
@@ -55,9 +58,9 @@ async def update_queue_embed(channel, queue_name: str):
 			)
 			
 		# Update the message
-		if queue_name in queue_embeds:
+		if queue_name in qc.queue_embeds:
 			try:
-				message = await channel.fetch_message(queue_embeds[queue_name])
+				message = await channel.fetch_message(qc.queue_embeds[queue_name])
 				await message.edit(embed=embed)
 				print(f"✅ Updated queue embed for {queue_name}")
 			except Exception as e:
