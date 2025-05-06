@@ -14,6 +14,8 @@ import json
 
 # Dictionary to store active tasks
 queue_tasks = {}
+# Dictionary to store queue channels
+queue_channels = {}
 
 async def keep_embed_at_bottom(channel, queue_name: str, message_id: int):
 	"""Background task to keep the queue embed at the bottom of the channel"""
@@ -495,7 +497,7 @@ async def join_callback(interaction):
 	"""Callback for the join button"""
 	try:
 		# Get the queue name from the button's custom_id
-		queue_name = interaction.custom_id.split('_')[1]
+		queue_name = interaction.data['custom_id'].split('_')[1]
 		
 		# Get the queue channel and queue
 		channel = interaction.channel
@@ -528,7 +530,7 @@ async def leave_callback(interaction):
 	"""Callback for the leave button"""
 	try:
 		# Get the queue name from the button's custom_id
-		queue_name = interaction.custom_id.split('_')[1]
+		queue_name = interaction.data['custom_id'].split('_')[1]
 		
 		# Get the queue channel and queue
 		channel = interaction.channel
