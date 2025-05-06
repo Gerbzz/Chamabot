@@ -6,6 +6,7 @@ from nextcord.ui import View, Button
 import logging
 import nextcord.ext.commands
 import asyncio
+import time
 
 from core.console import log
 from core.database import db
@@ -170,8 +171,8 @@ async def load_state():
 									
 								# Create the view
 								view = View(timeout=None)
-								join_button = Button(label="Join", style=ButtonStyle.green, custom_id=f"join_{queue_name}")
-								leave_button = Button(label="Leave", style=ButtonStyle.red, custom_id=f"leave_{queue_name}")
+								join_button = Button(label="Join Queue", style=ButtonStyle.green, custom_id=f"join_{queue_name}")
+								leave_button = Button(label="Leave Queue", style=ButtonStyle.red, custom_id=f"leave_{queue_name}")
 								join_button.callback = bot.commands.queues.join_callback
 								leave_button.callback = bot.commands.queues.leave_callback
 								view.add_item(join_button)
@@ -196,6 +197,16 @@ async def load_state():
 										value="No players in queue",
 										inline=False
 									)
+								
+								# Add queue info
+								embed.add_field(
+									name="Status",
+									value=f"{len(q.queue)}/{q.cfg.size} players",
+									inline=True
+								)
+								
+								# Add footer with timestamp
+								embed.set_footer(text=f"Last updated: {time.strftime('%H:%M:%S')}")
 								
 								# Send new embed
 								new_message = await channel.send(embed=embed, view=view)
