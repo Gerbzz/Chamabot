@@ -214,6 +214,8 @@ async def add(ctx, queues: str = None):
 		qr[q] = await q.add_member(ctx, ctx.author)
 		if qr[q] == bot.Qr.QueueStarted:
 			await ctx.notice(ctx.qc.topic)
+			# Update the queue embed
+			await update_queue_embed(ctx.channel, q.name)
 			return
 
 	if len(not_allowed := [q for q in qr.keys() if qr[q] == bot.Qr.NotAllowed]):
@@ -226,6 +228,9 @@ async def add(ctx, queues: str = None):
 		if phrase:
 			await ctx.reply(phrase)
 		await ctx.notice(ctx.qc.topic)
+		# Update embeds for all affected queues
+		for q in t_queues:
+			await update_queue_embed(ctx.channel, q.name)
 	else:  # have to give some response for slash commands
 		await ctx.ignore(content=ctx.qc.topic, embed=error_embed(ctx.qc.gt("Action had no effect."), title=None))
 
@@ -246,6 +251,8 @@ async def remove(ctx, queues: str = None):
 	if len(t_queues):
 		for q in t_queues:
 			q.pop_members(ctx.author)
+			# Update the queue embed after removing player
+			await update_queue_embed(ctx.channel, q.name)
 
 		if not any((q.is_added(ctx.author) for q in ctx.qc.queues)):
 			bot.expire.cancel(ctx.qc, ctx.author)
@@ -645,6 +652,9 @@ async def join_callback(interaction):
 			
 		# Add the user to the queue
 		await add(ctx, queue_name)
+		
+		# Update the queue embed
+		await update_queue_embed(channel, queue_name)
 			
 	except Exception as e:
 		print(f"Error in join_callback: {str(e)}")
@@ -668,6 +678,9 @@ async def leave_callback(interaction):
 			
 		# Remove the user from the queue
 		await remove(ctx, queue_name)
+		
+		# Update the queue embed
+		await update_queue_embed(channel, queue_name)
 			
 	except Exception as e:
 		print(f"Error in leave_callback: {str(e)}")
