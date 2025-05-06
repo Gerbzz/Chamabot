@@ -1,5 +1,6 @@
 import traceback
-from nextcord import ChannelType, Activity, ActivityType, Button, View, ButtonStyle
+from nextcord import ChannelType, Activity, ActivityType, Button, ButtonStyle
+from nextcord.ui import View
 
 from core.client import dc
 from core.console import log
