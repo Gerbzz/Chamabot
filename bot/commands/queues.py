@@ -435,18 +435,26 @@ async def queue_embed(ctx, queue_name: str):
 		# Find the queue across all channels in this server
 		q = None
 		source_qc = None
+		source_channel_id = None
 		for channel_id, qc in server_queue_channels.items():
 			found_q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
 			if found_q:
 				q = found_q
 				source_qc = qc
+				source_channel_id = channel_id
 				break
 				
 		if not q:
 			print("❌ Queue not found in this server")
 			await ctx.error(f"Queue {queue_name} not found in this server")
 			return
-		print(f"✅ Found queue in channel {source_qc.channel.name}")
+			
+		# Get the source channel name
+		source_channel = ctx.guild.get_channel(source_channel_id)
+		if source_channel:
+			print(f"✅ Found queue in channel {source_channel.name}")
+		else:
+			print(f"✅ Found queue in channel ID {source_channel_id}")
 		
 		# Check if queue is empty
 		if len(q.queue) == 0:
