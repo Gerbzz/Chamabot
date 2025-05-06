@@ -313,7 +313,7 @@ async def queue_embed(ctx, queue_name: str):
 		print(f"[DEBUG] Created new embed with message ID: {message.id}")
 
 		# Register the view with the bot
-		ctx.bot.add_view(view)
+		ctx.client.add_view(view)
 		print(f"[DEBUG] Registered view with bot for queue: {q.name}")
 
 		# Set up button callbacks
