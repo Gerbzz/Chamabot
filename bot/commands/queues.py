@@ -418,13 +418,13 @@ async def queue_embed(ctx, queue_name: str):
 	print("==================================================")
 	print(f"🎯 Queue: {queue_name}")
 	print(f"👤 Context type: {type(ctx)}")
-	print(f"🏠 Server ID: {ctx.guild.id}")
+	print(f"🏠 Server ID: {ctx.interaction.guild.id}")
 	
 	try:
 		# Find all queue channels in this server
 		server_queue_channels = {
 			channel_id: qc for channel_id, qc in bot.queue_channels.items()
-			if qc.guild.id == ctx.guild.id
+			if qc.guild.id == ctx.interaction.guild.id
 		}
 		
 		if not server_queue_channels:
