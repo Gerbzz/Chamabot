@@ -237,17 +237,22 @@ async def maps(ctx, queue: str, one: bool = False):
 async def queue_embed(ctx, queue_name: str):
 	"""Create or update a queue embed with join/leave buttons"""
 	try:
-		print(f"\n[DEBUG] Creating queue embed for queue: {queue_name}")
+		print(f"\n[DEBUG] ===== Starting queue_embed function =====")
+		print(f"[DEBUG] Queue name requested: {queue_name}")
+		print(f"[DEBUG] Context type: {type(ctx)}")
 		print(f"[DEBUG] Available queues: {[q.name for q in ctx.qc.queues]}")
 
 		# Find the queue
 		q = find(lambda i: i.name.lower() == queue_name.lower(), ctx.qc.queues)
 		if not q:
-			print(f"[DEBUG] Queue not found: {queue_name}")
+			print(f"[DEBUG] ❌ Queue not found: {queue_name}")
 			raise bot.Exc.SyntaxError(f"Queue '{queue_name}' not found on the channel.")
-		print(f"[DEBUG] Found queue: {q.name}")
+		print(f"[DEBUG] ✅ Found queue: {q.name}")
+		print(f"[DEBUG] Queue status: {q.status}")
+		print(f"[DEBUG] Current queue length: {len(q.queue)}")
 
 		# Create the embed
+		print(f"[DEBUG] Creating embed for queue: {q.name}")
 		embed = Embed(
 			title=f"{q.name} Queue",
 			description="Current queued players:",
@@ -256,7 +261,9 @@ async def queue_embed(ctx, queue_name: str):
 
 		# Add players to embed
 		if len(q.queue):
-			print(f"[DEBUG] Queue has {len(q.queue)} players: {[p.display_name for p in q.queue]}")
+			print(f"[DEBUG] Queue has {len(q.queue)} players:")
+			for player in q.queue:
+				print(f"[DEBUG] - Player: {player.display_name} (ID: {player.id})")
 			embed.add_field(
 				name="Players",
 				value="\n".join([f"• {player.display_name}" for player in q.queue]),
@@ -271,6 +278,7 @@ async def queue_embed(ctx, queue_name: str):
 			)
 
 		# Create buttons
+		print(f"[DEBUG] Creating buttons for queue: {q.name}")
 		join_button = Button(
 			style=ButtonStyle.green,
 			custom_id=f"join_{q.name}",
@@ -283,70 +291,104 @@ async def queue_embed(ctx, queue_name: str):
 			emoji="❌",
 			label="Leave"
 		)
-		print(f"[DEBUG] Created buttons with IDs: join_{q.name}, leave_{q.name}")
+		print(f"[DEBUG] Created buttons:")
+		print(f"[DEBUG] - Join button ID: join_{q.name}")
+		print(f"[DEBUG] - Leave button ID: leave_{q.name}")
 
 		# Create view and add buttons
+		print("[DEBUG] Creating view with persistent buttons")
 		view = View(timeout=None)  # Set timeout to None for persistent buttons
 		view.add_item(join_button)
 		view.add_item(leave_button)
-		print("[DEBUG] Created view with buttons")
+		print("[DEBUG] ✅ View created and buttons added")
 
 		# Handle existing embed
 		if not hasattr(ctx.qc, 'queue_embeds'):
 			print("[DEBUG] Initializing queue_embeds dictionary")
 			ctx.qc.queue_embeds = {}
+			print(f"[DEBUG] Current queue_embeds: {ctx.qc.queue_embeds}")
 
 		if q.name in ctx.qc.queue_embeds:
 			try:
-				print(f"[DEBUG] Updating existing embed for queue: {q.name}")
+				print(f"[DEBUG] Found existing embed for queue: {q.name}")
+				print(f"[DEBUG] Message ID: {ctx.qc.queue_embeds[q.name]}")
 				message = await ctx.channel.fetch_message(ctx.qc.queue_embeds[q.name])
+				print("[DEBUG] Successfully fetched existing message")
 				await message.edit(embed=embed, view=view)
+				print("[DEBUG] ✅ Successfully updated existing embed")
 				return
 			except Exception as e:
-				print(f"[DEBUG] Failed to update existing embed: {str(e)}")
+				print(f"[DEBUG] ❌ Failed to update existing embed: {str(e)}")
+				print(f"[DEBUG] Error type: {type(e)}")
 				pass
 
 		# Create new embed
 		print(f"[DEBUG] Creating new embed for queue: {q.name}")
 		message = await ctx.channel.send(embed=embed, view=view)
 		ctx.qc.queue_embeds[q.name] = message.id
-		print(f"[DEBUG] Created new embed with message ID: {message.id}")
+		print(f"[DEBUG] ✅ Created new embed with message ID: {message.id}")
+		print(f"[DEBUG] Updated queue_embeds: {ctx.qc.queue_embeds}")
 
 		# Register the view with the bot
-		ctx.bot.add_view(view)
-		print(f"[DEBUG] Registered view with bot for queue: {q.name}")
+		print("[DEBUG] Attempting to register view with bot")
+		try:
+			ctx.interaction.client.add_view(view)
+			print("[DEBUG] ✅ Successfully registered view with bot")
+		except Exception as e:
+			print(f"[DEBUG] ❌ Failed to register view: {str(e)}")
+			print(f"[DEBUG] Error type: {type(e)}")
 
 		# Set up button callbacks
+		print("[DEBUG] Setting up button callbacks")
 		async def join_callback(interaction):
-			print(f"\n[DEBUG] Join button callback triggered for queue: {q.name}")
-			print(f"[DEBUG] Interaction user: {interaction.user.display_name}")
+			print(f"\n[DEBUG] ===== Join button callback triggered =====")
+			print(f"[DEBUG] Queue: {q.name}")
+			print(f"[DEBUG] User: {interaction.user.display_name} (ID: {interaction.user.id})")
+			print(f"[DEBUG] Current queue state: {[p.display_name for p in q.queue]}")
+			
 			resp = await q.add_member(ctx, interaction.user)
+			print(f"[DEBUG] Add member response: {resp}")
+			
 			if resp == bot.Qr.Success:
+				print("[DEBUG] ✅ Successfully added user to queue")
 				await ctx.qc.update_expire(interaction.user)
 				await interaction.response.send_message("You have joined the queue!", ephemeral=True)
 			elif resp == bot.Qr.QueueStarted:
+				print("[DEBUG] Queue has started")
 				await interaction.response.send_message("Queue has started!", ephemeral=True)
 			else:
+				print(f"[DEBUG] ❌ Failed to add user to queue: {resp}")
 				await interaction.response.send_message("Could not join the queue!", ephemeral=True)
 			await queue_embed(ctx, q.name)
 
 		async def leave_callback(interaction):
-			print(f"\n[DEBUG] Leave button callback triggered for queue: {q.name}")
-			print(f"[DEBUG] Interaction user: {interaction.user.display_name}")
+			print(f"\n[DEBUG] ===== Leave button callback triggered =====")
+			print(f"[DEBUG] Queue: {q.name}")
+			print(f"[DEBUG] User: {interaction.user.display_name} (ID: {interaction.user.id})")
+			print(f"[DEBUG] Current queue state: {[p.display_name for p in q.queue]}")
+			
 			if q.is_added(interaction.user):
+				print("[DEBUG] User found in queue, removing...")
 				q.pop_members(interaction.user)
 				if not any((q.is_added(interaction.user) for q in ctx.qc.queues)):
+					print("[DEBUG] User not in any queues, canceling expire")
 					bot.expire.cancel(ctx.qc, interaction.user)
 				await interaction.response.send_message("You have left the queue!", ephemeral=True)
+				print("[DEBUG] ✅ Successfully removed user from queue")
 			else:
+				print("[DEBUG] ❌ User not found in queue")
 				await interaction.response.send_message("You are not in this queue!", ephemeral=True)
 			await queue_embed(ctx, q.name)
 
 		# Add callbacks to buttons
 		join_button.callback = join_callback
 		leave_button.callback = leave_callback
-		print(f"[DEBUG] Set up button callbacks for queue: {q.name}")
+		print("[DEBUG] ✅ Button callbacks set up successfully")
 
 	except Exception as e:
-		print(f"[DEBUG] Error in queue_embed: {str(e)}")
+		print(f"\n[DEBUG] ===== Error in queue_embed =====")
+		print(f"[DEBUG] Error message: {str(e)}")
+		print(f"[DEBUG] Error type: {type(e)}")
+		print(f"[DEBUG] Queue name: {queue_name}")
+		print(f"[DEBUG] Context type: {type(ctx)}")
 		await ctx.error(f"An error occurred while creating the queue embed: {str(e)}")
