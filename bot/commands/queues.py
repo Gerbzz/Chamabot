@@ -15,6 +15,7 @@ import bot
 import asyncio
 import json
 import logging
+from datetime import datetime, timedelta
 
 # Global dictionaries for queue management
 queue_tasks = {}  # Store active tasks
@@ -22,6 +23,10 @@ queue_channels = {}  # Store queue channels
 queue_views = {}  # Store queue views
 queue_embeds = {}  # Store queue embeds
 global_queue_embeds = {}  # Store global queue embeds
+last_global_updates = {}  # Store timestamps of last updates for rate limiting
+
+# Rate limiting constants
+MIN_UPDATE_INTERVAL = 5  # Minimum seconds between updates for the same embed
 
 async def update_queue_embed(ctx, queue_name):
 	"""Update a queue embed without posting to chat"""
@@ -1105,6 +1110,9 @@ async def update_global_queue_embed(channel, queue_name, queue_channel_id=None):
 		# Track which embeds were successfully updated
 		updated_embeds = set()
 		failed_embeds = {}
+		skipped_embeds = {}
+
+		current_time = datetime.now()
 
 		# Update all global embeds for this queue
 		for key, message_id in list(global_queue_embeds.items()):
@@ -1113,6 +1121,14 @@ async def update_global_queue_embed(channel, queue_name, queue_channel_id=None):
 			print(f"📊 Parts: {parts}")
 			
 			if len(parts) >= 4 and parts[0] == "global" and parts[1] == queue_name:
+				# Check rate limiting
+				if key in last_global_updates:
+					time_since_last_update = (current_time - last_global_updates[key]).total_seconds()
+					if time_since_last_update < MIN_UPDATE_INTERVAL:
+						print(f"⏳ Skipping update for {key} due to rate limiting (last update was {time_since_last_update:.2f}s ago)")
+						skipped_embeds[key] = f"Rate limited ({time_since_last_update:.2f}s < {MIN_UPDATE_INTERVAL}s)"
+						continue
+
 				try:
 					embed_channel_id = int(parts[2])
 					embed_channel = dc.get_channel(embed_channel_id)
@@ -1156,6 +1172,7 @@ async def update_global_queue_embed(channel, queue_name, queue_channel_id=None):
 						await message.edit(embed=embed)
 						print(f"✅ Updated global queue embed in channel {embed_channel.name} for {queue_name}")
 						updated_embeds.add(key)
+						last_global_updates[key] = current_time
 					except discord.NotFound:
 						print(f"❌ Message {message_id} not found in channel {embed_channel.name}")
 						failed_embeds[key] = "Message not found"
@@ -1174,6 +1191,8 @@ async def update_global_queue_embed(channel, queue_name, queue_channel_id=None):
 		for key, reason in failed_embeds.items():
 			print(f"🗑️ Removing invalid global embed {key}: {reason}")
 			del global_queue_embeds[key]
+			if key in last_global_updates:
+				del last_global_updates[key]
 		
 		# Save changes if any embeds were removed
 		if failed_embeds:
@@ -1183,7 +1202,9 @@ async def update_global_queue_embed(channel, queue_name, queue_channel_id=None):
 		# Log summary
 		if updated_embeds:
 			print(f"📊 Successfully updated {len(updated_embeds)} global embeds for {queue_name}")
-		if not updated_embeds and not failed_embeds:
+		if skipped_embeds:
+			print(f"⏳ Skipped {len(skipped_embeds)} updates due to rate limiting")
+		if not updated_embeds and not failed_embeds and not skipped_embeds:
 			print(f"ℹ️ No global embeds found for {queue_name}")
 
 	except Exception as e:
