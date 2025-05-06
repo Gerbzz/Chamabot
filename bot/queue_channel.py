@@ -335,6 +335,8 @@ class QueueChannel:
 		)
 		self.queues = []
 		self.last_promote = 0
+		self.queue_views = {}  # Dictionary to store views for each queue
+		self.queue_embeds = {}  # Dictionary to store message IDs for each queue
 
 	async def update_info(self, text_channel):
 		self.cfg.cfg_info['channel_name'] = text_channel.name
