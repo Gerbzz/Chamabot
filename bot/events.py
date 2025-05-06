@@ -60,10 +60,9 @@ async def on_reaction_remove(reaction, user):  # FIXME: this event does not get 
 
 @dc.event
 async def on_ready():
-	global bot_was_ready, bot_ready
-	if not bot_was_ready:
+	if not bot.bot_was_ready:
 		log.info("Connecting to discord...")
-		bot_was_ready = True
+		bot.bot_was_ready = True
 	else:
 		log.info("Reconnecting to discord...")
 
@@ -80,8 +79,8 @@ async def on_ready():
 	await bot.load_state()
 	log.info("Done.")
 
-	if not bot_ready:
-		bot_ready = True
+	if not bot.bot_ready:
+		bot.bot_ready = True
 		log.info("Registering existing queue embed views...")
 		for qc in bot.queue_channels.values():
 			if (channel := dc.get_channel(qc.id)) is not None:
