@@ -286,7 +286,7 @@ async def queue_embed(ctx, queue_name: str):
 		print(f"[DEBUG] Created buttons with IDs: join_{q.name}, leave_{q.name}")
 
 		# Create view and add buttons
-		view = View()
+		view = View(timeout=None)  # Set timeout to None for persistent buttons
 		view.add_item(join_button)
 		view.add_item(leave_button)
 		print("[DEBUG] Created view with buttons")
