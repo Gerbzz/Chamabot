@@ -6,7 +6,7 @@ __all__ = [
 import time
 from random import choice
 from nextcord import Member, Embed, Button, ButtonStyle, ActionRow
-from nextcord.ui import Button
+from nextcord.ui import View, Button
 from core.utils import error_embed, join_and, find, seconds_to_str
 import bot
 
@@ -285,9 +285,11 @@ async def queue_embed(ctx, queue_name: str):
 		)
 		print(f"[DEBUG] Created buttons with IDs: join_{q.name}, leave_{q.name}")
 
-		# Create action row
-		action_row = ActionRow(components=[join_button, leave_button])
-		print("[DEBUG] Created action row with buttons")
+		# Create view and add buttons
+		view = View()
+		view.add_item(join_button)
+		view.add_item(leave_button)
+		print("[DEBUG] Created view with buttons")
 
 		# Handle existing embed
 		if not hasattr(ctx.qc, 'queue_embeds'):
@@ -298,7 +300,7 @@ async def queue_embed(ctx, queue_name: str):
 			try:
 				print(f"[DEBUG] Updating existing embed for queue: {q.name}")
 				message = await ctx.channel.fetch_message(ctx.qc.queue_embeds[q.name])
-				await message.edit(embed=embed, components=[action_row])
+				await message.edit(embed=embed, view=view)
 				return
 			except Exception as e:
 				print(f"[DEBUG] Failed to update existing embed: {str(e)}")
@@ -306,7 +308,7 @@ async def queue_embed(ctx, queue_name: str):
 
 		# Create new embed
 		print(f"[DEBUG] Creating new embed for queue: {q.name}")
-		message = await ctx.channel.send(embed=embed, components=[action_row])
+		message = await ctx.channel.send(embed=embed, view=view)
 		ctx.qc.queue_embeds[q.name] = message.id
 		print(f"[DEBUG] Created new embed with message ID: {message.id}")
 
