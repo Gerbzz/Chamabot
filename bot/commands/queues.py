@@ -797,11 +797,8 @@ async def leave_callback(interaction):
 		ctx = bot.context.slash.context.SlashContext(qc, interaction)
 			
 		# Remove the user from the queue
+		# Note: remove() will handle updating both normal and global embeds
 		await remove(ctx, queue_name)
-		
-		# Update both the normal queue embed and any global embeds
-		await update_queue_embed(ctx, queue_name)
-		await update_global_queue_embed(channel, queue_name, qc.id)
 			
 	except Exception as e:
 		print(f"Error in leave_callback: {str(e)}")
