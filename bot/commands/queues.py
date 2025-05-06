@@ -389,19 +389,49 @@ async def queue_embed(ctx, queue_name: str):
 			print(f"[DEBUG] Queue: {q.name}")
 			print(f"[DEBUG] User: {interaction.user.display_name} (ID: {interaction.user.id})")
 			print(f"[DEBUG] Current queue state: {[p.display_name for p in q.queue]}")
+			print(f"[DEBUG] Queue config: {q.cfg.__dict__ if hasattr(q, 'cfg') else 'No config'}")
+			print(f"[DEBUG] Queue status: {q.status}")
+			print(f"[DEBUG] Queue length: {len(q.queue)}")
 			
-			if q.is_added(interaction.user):
-				print("[DEBUG] User found in queue, removing...")
-				q.pop_members(interaction.user)
-				if not any((q.is_added(interaction.user) for q in ctx.qc.queues)):
-					print("[DEBUG] User not in any queues, canceling expire")
-					bot.expire.cancel(ctx.qc, interaction.user)
-				await interaction.response.send_message("You have left the queue!", ephemeral=True)
-				print("[DEBUG] ✅ Successfully removed user from queue")
-			else:
-				print("[DEBUG] ❌ User not found in queue")
-				await interaction.response.send_message("You are not in this queue!", ephemeral=True)
-			await queue_embed(ctx, q.name)
+			try:
+				print("[DEBUG] Checking if user is in queue...")
+				is_added = q.is_added(interaction.user)
+				print(f"[DEBUG] User in queue: {is_added}")
+				
+				if is_added:
+					print("[DEBUG] User found in queue, removing...")
+					print(f"[DEBUG] Queue before removal: {[p.display_name for p in q.queue]}")
+					q.pop_members(interaction.user)
+					print(f"[DEBUG] Queue after removal: {[p.display_name for p in q.queue]}")
+					
+					print("[DEBUG] Checking if user is in any other queues...")
+					in_other_queues = any((q.is_added(interaction.user) for q in ctx.qc.queues))
+					print(f"[DEBUG] User in other queues: {in_other_queues}")
+					
+					if not in_other_queues:
+						print("[DEBUG] User not in any queues, canceling expire")
+						bot.expire.cancel(ctx.qc, interaction.user)
+					
+					print("[DEBUG] Sending success message...")
+					await interaction.response.send_message("You have left the queue!", ephemeral=True)
+					print("[DEBUG] ✅ Successfully removed user from queue")
+				else:
+					print("[DEBUG] ❌ User not found in queue")
+					await interaction.response.send_message("You are not in this queue!", ephemeral=True)
+				
+				print("[DEBUG] Updating queue embed...")
+				await queue_embed(ctx, q.name)
+				print("[DEBUG] Queue embed updated")
+			except Exception as e:
+				print(f"[DEBUG] ❌ Error in leave callback: {str(e)}")
+				print(f"[DEBUG] Error type: {type(e)}")
+				print(f"[DEBUG] Error traceback:")
+				import traceback
+				print(traceback.format_exc())
+				try:
+					await interaction.response.send_message("An error occurred while leaving the queue!", ephemeral=True)
+				except Exception as e2:
+					print(f"[DEBUG] ❌ Failed to send error message: {str(e2)}")
 
 		# Add callbacks to buttons
 		join_button.callback = join_callback
