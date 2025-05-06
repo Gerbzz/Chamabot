@@ -16,6 +16,57 @@ import json
 queue_tasks = {}
 # Dictionary to store queue channels
 queue_channels = {}
+# Dictionary to store queue views
+queue_views = {}
+# Dictionary to store queue embeds
+queue_embeds = {}
+
+async def update_queue_embed(channel, queue_name: str):
+	"""Update the queue embed with current players"""
+	try:
+		# Get the queue
+		qc = bot.queue_channels.get(channel.id)
+		if not qc:
+			return
+			
+		q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
+		if not q:
+			return
+			
+		# Get the view
+		view = queue_views.get(queue_name)
+		if not view:
+			return
+			
+		# Create new embed
+		embed = Embed(
+			title=f"{q.name} Queue",
+			description="Current queued players:",
+			color=0x7289DA
+		)
+		if len(q.queue):
+			embed.add_field(
+				name="Players",
+				value="\n".join([f"• {player.display_name}" for player in q.queue]),
+				inline=False
+			)
+		else:
+			embed.add_field(
+				name="Players",
+				value="No players in queue",
+				inline=False
+			)
+			
+		# Update the message
+		if queue_name in queue_embeds:
+			try:
+				message = await channel.fetch_message(queue_embeds[queue_name])
+				await message.edit(embed=embed, view=view)
+			except Exception as e:
+				print(f"Error updating embed: {str(e)}")
+				
+	except Exception as e:
+		print(f"Error in update_queue_embed: {str(e)}")
 
 async def keep_embed_at_bottom(channel, queue_name: str, message_id: int):
 	"""Background task to keep the queue embed at the bottom of the channel"""
@@ -36,7 +87,10 @@ async def keep_embed_at_bottom(channel, queue_name: str, message_id: int):
 					# Get the view
 					view = queue_views[queue_name]
 					# Get the current queue
-					q = find(lambda i: i.name.lower() == queue_name.lower(), queues)
+					qc = bot.queue_channels.get(channel.id)
+					if not qc:
+						continue
+					q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
 					if q:
 						# Create new embed
 						embed = Embed(
@@ -392,11 +446,13 @@ def save_queue_data():
 	try:
 		# Get all queue embeds
 		queue_data = {}
-		for queue_name, message_id in ctx.qc.queue_embeds.items():
-			queue_data[queue_name] = {
-				'message_id': message_id,
-				'channel_id': ctx.channel.id
-			}
+		for queue_name, message_id in queue_embeds.items():
+			channel_id = queue_channels.get(queue_name)
+			if channel_id:
+				queue_data[queue_name] = {
+					'message_id': message_id,
+					'channel_id': channel_id
+				}
 		
 		# Save to database
 		with open('queue_data.json', 'w') as f:
@@ -413,9 +469,9 @@ def load_queue_data():
 		
 		# Restore queue embeds and channels
 		for queue_name, data in queue_data.items():
-			ctx.qc.queue_embeds[queue_name] = data['message_id']
+			queue_embeds[queue_name] = data['message_id']
 			if data['channel_id']:
-				ctx.channel.id = data['channel_id']
+				queue_channels[queue_name] = data['channel_id']
 		print("✅ Loaded queue data from database")
 	except FileNotFoundError:
 		print("ℹ️ No queue data found in database")
@@ -429,8 +485,8 @@ async def recreate_queue_embeds():
 		load_queue_data()
 		
 		# Recreate each queue embed
-		for queue_name, message_id in ctx.qc.queue_embeds.items():
-			channel_id = ctx.channel.id
+		for queue_name, message_id in queue_embeds.items():
+			channel_id = queue_channels.get(queue_name)
 			if not channel_id:
 				continue
 				
@@ -478,7 +534,7 @@ async def recreate_queue_embeds():
 				
 				# Send new embed
 				new_message = await channel.send(embed=embed, view=view)
-				ctx.qc.queue_embeds[queue_name] = new_message.id
+				queue_embeds[queue_name] = new_message.id
 				
 				# Start background task
 				bot.loop.create_task(keep_embed_at_bottom(ctx.channel, queue_name, new_message.id))
@@ -517,8 +573,12 @@ async def join_callback(interaction):
 		if resp == bot.Qr.Success:
 			await qc.update_expire(interaction.user)
 			await interaction.response.send_message(f"Added to {queue_name} queue!", ephemeral=True)
+			# Update the embed
+			await update_queue_embed(channel, queue_name)
 		elif resp == bot.Qr.QueueStarted:
 			await interaction.response.send_message("Queue started!", ephemeral=True)
+			# Update the embed
+			await update_queue_embed(channel, queue_name)
 		else:
 			await interaction.response.send_message("Could not join the queue.", ephemeral=True)
 			
@@ -551,6 +611,8 @@ async def leave_callback(interaction):
 			if not any((q.is_added(interaction.user) for q in qc.queues)):
 				bot.expire.cancel(qc, interaction.user)
 			await interaction.response.send_message(f"Removed from {queue_name} queue!", ephemeral=True)
+			# Update the embed
+			await update_queue_embed(channel, queue_name)
 		else:
 			await interaction.response.send_message("You are not in this queue.", ephemeral=True)
 			
