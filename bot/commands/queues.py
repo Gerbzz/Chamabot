@@ -490,3 +490,68 @@ async def recreate_queue_embeds():
 		
 	except Exception as e:
 		print(f"❌ Error in recreate_queue_embeds: {str(e)}")
+
+async def join_callback(interaction):
+	"""Callback for the join button"""
+	try:
+		# Get the queue name from the button's custom_id
+		queue_name = interaction.custom_id.split('_')[1]
+		
+		# Get the queue channel and queue
+		channel = interaction.channel
+		qc = bot.queue_channels.get(channel.id)
+		if not qc:
+			await interaction.response.send_message("This queue is no longer active.", ephemeral=True)
+			return
+			
+		# Find the queue
+		q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
+		if not q:
+			await interaction.response.send_message(f"Queue {queue_name} not found.", ephemeral=True)
+			return
+			
+		# Add the user to the queue
+		resp = await q.add_member(interaction, interaction.user)
+		if resp == bot.Qr.Success:
+			await qc.update_expire(interaction.user)
+			await interaction.response.send_message(f"Added to {queue_name} queue!", ephemeral=True)
+		elif resp == bot.Qr.QueueStarted:
+			await interaction.response.send_message("Queue started!", ephemeral=True)
+		else:
+			await interaction.response.send_message("Could not join the queue.", ephemeral=True)
+			
+	except Exception as e:
+		print(f"Error in join_callback: {str(e)}")
+		await interaction.response.send_message("An error occurred while joining the queue.", ephemeral=True)
+
+async def leave_callback(interaction):
+	"""Callback for the leave button"""
+	try:
+		# Get the queue name from the button's custom_id
+		queue_name = interaction.custom_id.split('_')[1]
+		
+		# Get the queue channel and queue
+		channel = interaction.channel
+		qc = bot.queue_channels.get(channel.id)
+		if not qc:
+			await interaction.response.send_message("This queue is no longer active.", ephemeral=True)
+			return
+			
+		# Find the queue
+		q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
+		if not q:
+			await interaction.response.send_message(f"Queue {queue_name} not found.", ephemeral=True)
+			return
+			
+		# Remove the user from the queue
+		if q.is_added(interaction.user):
+			q.pop_members(interaction.user)
+			if not any((q.is_added(interaction.user) for q in qc.queues)):
+				bot.expire.cancel(qc, interaction.user)
+			await interaction.response.send_message(f"Removed from {queue_name} queue!", ephemeral=True)
+		else:
+			await interaction.response.send_message("You are not in this queue.", ephemeral=True)
+			
+	except Exception as e:
+		print(f"Error in leave_callback: {str(e)}")
+		await interaction.response.send_message("An error occurred while leaving the queue.", ephemeral=True)
