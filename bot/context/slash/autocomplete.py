@@ -7,6 +7,21 @@ import bot
 
 
 async def queues(interaction: Interaction, queue: str) -> List[str]:
+	# Get the current command name to determine context
+	command_name = interaction.data.get('name', '')
+	
+	# For global queue embeds, show queues from all channels with channel info
+	if command_name in ['global-queue-embed', 'remove-global-queue-embed']:
+		all_queues = []
+		for qc in bot.queue_channels.values():
+			for q in qc.queues:
+				if q.name.lower().startswith(queue.lower()):
+					# Add channel information in parentheses
+					channel_name = qc.channel.name if qc.channel else "unknown-channel"
+					all_queues.append(f"{q.name} (#{channel_name})")
+		return all_queues[:25]  # Limit to 25 results
+	
+	# Standard behavior for commands operating on the current channel only
 	if (qc := bot.queue_channels.get(interaction.channel_id)) is not None:
 		return [q.name for q in qc.queues if q.name.startswith(queue)]
 	else:

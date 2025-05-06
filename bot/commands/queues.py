@@ -6,7 +6,7 @@ __all__ = [
 
 import time
 from random import choice
-from nextcord import Member, Embed, Button, ButtonStyle, ActionRow
+from nextcord import Member, Embed, Button, ButtonStyle, ActionRow, TextChannel
 from nextcord.ui import View, Button
 from core.utils import error_embed, join_and, find, seconds_to_str
 from core.client import dc
@@ -1081,47 +1081,42 @@ async def update_global_queue_embed(channel, queue_name, queue_channel_id=None):
 	except Exception as e:
 		print(f"❌ Error in update_global_queue_embed: {str(e)}")
 
-async def global_queue_embed(ctx, queue_name: str, channel_id: int = None):
-	"""Create a global queue embed with join/leave buttons that doesn't post updates to chat
-	Can be posted in any channel, not just the queue channel"""
-	print("\n==================================================")
-	print("🎮 GLOBAL QUEUE EMBED")
-	print("==================================================")
-	print(f"🎯 Queue: {queue_name}")
-	print(f"👤 Context type: {type(ctx)}")
-	
+async def global_queue_embed(ctx, queue_name: str, queue_channel: TextChannel = None):
+	"""Create a global queue embed that works in any channel"""
 	try:
-		# Determine the channel to post in (current channel by default)
-		target_channel = ctx.channel
+		# Extract queue name and channel name from autocomplete result
+		if " (#" in queue_name:
+			queue_name, channel_name = queue_name.split(" (#", 1)
+			channel_name = channel_name.rstrip(")")
 		
-		# Find the queue channel that contains the requested queue
-		queue_channel = None
-		queue_obj = None
+		# Find the queue across all channels
+		target_qc = None
+		target_queue = None
 		
-		# First check if the current channel is a queue channel
-		if ctx.channel.id in bot.queue_channels:
-			current_qc = bot.queue_channels[ctx.channel.id]
-			# Check if the requested queue exists in this channel
-			if (q := find(lambda i: i.name.lower() == queue_name.lower(), current_qc.queues)):
-				queue_channel = current_qc
-				queue_obj = q
-		
-		# If we didn't find the queue in the current channel, search all queue channels
-		if not queue_obj:
-			for qc_id, qc in bot.queue_channels.items():
-				if (q := find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)):
-					queue_channel = qc
-					queue_obj = q
+		# If channel parameter provided, check that first
+		if queue_channel:
+			qc = bot.queue_channels.get(queue_channel.id)
+			if qc:
+				target_queue = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
+				if target_queue:
+					target_qc = qc
+
+		# If not found, search all queue channels
+		if not target_queue:
+			for qc in bot.queue_channels.values():
+				q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
+				if q:
+					target_qc = qc
+					target_queue = q
 					break
-		
-		# If we still couldn't find the queue, error out
-		if not queue_obj:
-			print("❌ Queue not found in any channel")
-			await ctx.error(f"Queue {queue_name} not found in any channel")
+
+		if not target_queue:
+			await ctx.error(f"Queue '{queue_name}' not found in any enabled channels")
 			return
-			
-		print(f"✅ Found queue {queue_name} in channel {queue_channel.channel.name}")
-		
+
+		# Rest of the existing embed creation code...
+		# Make sure to use target_qc and target_queue instead of local channel
+		# Update all references to use the found queue and queue channel
 		# Create the view with join/leave buttons
 		view = View(timeout=None)
 		
@@ -1129,7 +1124,7 @@ async def global_queue_embed(ctx, queue_name: str, channel_id: int = None):
 		join_button = Button(
 			style=ButtonStyle.green.value,
 			label="Join Queue",
-			custom_id=f"global_join_{queue_name}_{queue_channel.id}"
+			custom_id=f"global_join_{queue_name}_{target_qc.id}"
 		)
 		join_button.callback = global_join_callback
 		view.add_item(join_button)
@@ -1138,22 +1133,22 @@ async def global_queue_embed(ctx, queue_name: str, channel_id: int = None):
 		leave_button = Button(
 			style=ButtonStyle.red.value,
 			label="Leave Queue",
-			custom_id=f"global_leave_{queue_name}_{queue_channel.id}"
+			custom_id=f"global_leave_{queue_name}_{target_qc.id}"
 		)
 		leave_button.callback = global_leave_callback
 		view.add_item(leave_button)
 		
 		# Create the embed
 		embed = Embed(
-			title=f"{queue_obj.name} Queue",
-			description=f"Queue from channel: <#{queue_channel.id}>",
+			title=f"{target_queue.name} Queue",
+			description=f"Queue from channel: <#{target_qc.id}>",
 			color=0x7289DA
 		)
 		
-		if len(queue_obj.queue):
+		if len(target_queue.queue):
 			embed.add_field(
 				name="Players",
-				value="\n".join([f"• {player.display_name}" for player in queue_obj.queue]),
+				value="\n".join([f"• {player.display_name}" for player in target_queue.queue]),
 				inline=False
 			)
 		else:
@@ -1166,7 +1161,7 @@ async def global_queue_embed(ctx, queue_name: str, channel_id: int = None):
 		# Add queue info
 		embed.add_field(
 			name="Status",
-			value=f"{len(queue_obj.queue)}/{queue_obj.cfg.size} players",
+			value=f"{len(target_queue.queue)}/{target_queue.cfg.size} players",
 			inline=True
 		)
 		
@@ -1175,7 +1170,7 @@ async def global_queue_embed(ctx, queue_name: str, channel_id: int = None):
 		
 		# Create channel-specific key for tracking
 		# This includes both the target channel ID and the queue channel ID
-		channel_key = f"global_{queue_name}_{ctx.channel.id}_{queue_channel.id}"
+		channel_key = f"global_{queue_name}_{ctx.channel.id}_{target_qc.id}"
 		
 		# Check if we already have a message for this queue in this channel
 		if channel_key in global_queue_embeds:
@@ -1191,13 +1186,13 @@ async def global_queue_embed(ctx, queue_name: str, channel_id: int = None):
 				# If we can't update, create a new message
 				message = await ctx.channel.send(embed=embed, view=view)
 				global_queue_embeds[channel_key] = message.id
-				print(f"✅ Created new global embed")
+				print(f"✅ Created new global embed with key: {channel_key}, message ID: {message.id}")
 				message_created = True
 		else:
 			# Send new message if we don't have one
 			message = await ctx.channel.send(embed=embed, view=view)
 			global_queue_embeds[channel_key] = message.id
-			print(f"✅ Created new global embed")
+			print(f"✅ Created new global embed with key: {channel_key}, message ID: {message.id}")
 			message_created = True
 		
 		# Register the view with the bot for persistence

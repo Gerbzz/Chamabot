@@ -818,19 +818,27 @@ async def _global_queue_embed(
 	interaction: Interaction,
 	queue_name: str = SlashOption(
 		name="queue_name",
-		description="Name of the queue to create global embed for",
+		description="Name of the queue to create global embed for (include #channel)",
 		required=True
 	),
 	queue_channel: TextChannel = SlashOption(
 		name="queue_channel",
-		description="Channel where the queue is located (if not the current channel)",
+		description="Channel where the queue is located (if not specified in name)",
 		required=False
 	)
 ): 
-	if queue_channel:
-		await run_slash(bot.commands.global_queue_embed, interaction=interaction, queue_name=queue_name, channel_id=queue_channel.id)
-	else:
-		await run_slash(bot.commands.global_queue_embed, interaction=interaction, queue_name=queue_name)
+	# Extract channel name from queue_name if provided
+	channel = None
+	if " (#" in queue_name:
+		q_name, channel_name = queue_name.split(" (#", 1)
+		channel_name = channel_name.rstrip(")")
+		# Find channel by name
+		channel = find(lambda c: c.name == channel_name, interaction.guild.text_channels)
+	
+	await run_slash(bot.commands.global_queue_embed, 
+				   interaction=interaction, 
+				   queue_name=queue_name,
+				   queue_channel=channel or queue_channel)
 _global_queue_embed.on_autocomplete("queue_name")(autocomplete.queues)
 
 
@@ -848,9 +856,12 @@ async def _remove_global_queue_embed(
 		required=False
 	)
 ): 
+	# Extract the actual queue name if it includes channel info in parentheses
+	actual_queue_name = queue_name.split(" (")[0] if " (" in queue_name else queue_name
+	
 	if queue_channel:
-		await run_slash(bot.commands.remove_global_queue_embed, interaction=interaction, queue_name=queue_name, queue_channel_id=queue_channel.id)
+		await run_slash(bot.commands.remove_global_queue_embed, interaction=interaction, queue_name=actual_queue_name, queue_channel_id=queue_channel.id)
 	else:
-		await run_slash(bot.commands.remove_global_queue_embed, interaction=interaction, queue_name=queue_name)
+		await run_slash(bot.commands.remove_global_queue_embed, interaction=interaction, queue_name=actual_queue_name)
 _remove_global_queue_embed.on_autocomplete("queue_name")(autocomplete.queues)
 
