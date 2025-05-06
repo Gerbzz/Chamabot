@@ -466,8 +466,12 @@ async def queue_embed(ctx, queue_name: str):
 			print(f"📝 Creating new QueueChannel for channel {ctx.channel.id}")
 			current_qc = bot.QueueChannel(ctx.channel)
 			bot.queue_channels[ctx.channel.id] = current_qc
+			
 			# Copy the queue from the source channel
+			print(f"📝 Copying queue data from source channel")
 			current_qc.queues = source_qc.queues
+			current_qc.queue_views = {}
+			current_qc.queue_embeds = {}
 		
 		# Create or get the view
 		if queue_name in current_qc.queue_views:
