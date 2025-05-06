@@ -234,43 +234,18 @@ async def maps(ctx, queue: str, one: bool = False):
 		)
 
 
-async def _handle_queue_button(interaction, queue_name, ctx):
-	"""Handle button interactions for queue embeds"""
-	q = find(lambda i: i.name.lower() == queue_name.lower(), ctx.qc.queues)
-	if not q:
-		await interaction.response.send_message("Queue not found!", ephemeral=True)
-		return
-
-	try:
-		if interaction.custom_id == f"join_{queue_name}":
-			resp = await q.add_member(ctx, interaction.user)
-			if resp == bot.Qr.Success:
-				await ctx.qc.update_expire(interaction.user)
-				await interaction.response.send_message("You have joined the queue!", ephemeral=True)
-			elif resp == bot.Qr.QueueStarted:
-				await interaction.response.send_message("Queue started!", ephemeral=True)
-			else:
-				await interaction.response.send_message(f"Could not join queue: {resp.__name__}", ephemeral=True)
-		elif interaction.custom_id == f"leave_{queue_name}":
-			if interaction.user in q.queue:
-				q.pop_members(interaction.user)
-				if not any((q.is_added(interaction.user) for q in ctx.qc.queues)):
-					bot.expire.cancel(ctx.qc, interaction.user)
-				await interaction.response.send_message("You have left the queue!", ephemeral=True)
-			else:
-				await interaction.response.send_message("You are not in this queue!", ephemeral=True)
-
-		await queue_embed(ctx, queue_name)
-	except Exception as e:
-		await interaction.response.send_message(f"An error occurred: {str(e)}", ephemeral=True)
-
 async def queue_embed(ctx, queue_name: str):
 	"""Create or update a queue embed with join/leave buttons"""
 	try:
+		print(f"\n[DEBUG] Creating queue embed for queue: {queue_name}")
+		print(f"[DEBUG] Available queues: {[q.name for q in ctx.qc.queues]}")
+
 		# Find the queue
 		q = find(lambda i: i.name.lower() == queue_name.lower(), ctx.qc.queues)
 		if not q:
+			print(f"[DEBUG] Queue not found: {queue_name}")
 			raise bot.Exc.SyntaxError(f"Queue '{queue_name}' not found on the channel.")
+		print(f"[DEBUG] Found queue: {q.name}")
 
 		# Create the embed
 		embed = Embed(
@@ -281,12 +256,14 @@ async def queue_embed(ctx, queue_name: str):
 
 		# Add players to embed
 		if len(q.queue):
+			print(f"[DEBUG] Queue has {len(q.queue)} players: {[p.display_name for p in q.queue]}")
 			embed.add_field(
 				name="Players",
 				value="\n".join([f"• {player.display_name}" for player in q.queue]),
 				inline=False
 			)
 		else:
+			print("[DEBUG] Queue is empty")
 			embed.add_field(
 				name="Players",
 				value="No players in queue",
@@ -306,30 +283,94 @@ async def queue_embed(ctx, queue_name: str):
 			emoji="❌",
 			label="Leave"
 		)
+		print(f"[DEBUG] Created buttons with IDs: join_{q.name}, leave_{q.name}")
 
 		# Create action row
 		action_row = ActionRow(join_button, leave_button)
 
 		# Handle existing embed
 		if not hasattr(ctx.qc, 'queue_embeds'):
+			print("[DEBUG] Initializing queue_embeds dictionary")
 			ctx.qc.queue_embeds = {}
 
 		if q.name in ctx.qc.queue_embeds:
 			try:
+				print(f"[DEBUG] Updating existing embed for queue: {q.name}")
 				message = await ctx.channel.fetch_message(ctx.qc.queue_embeds[q.name])
 				await message.edit(embed=embed, components=[action_row])
 				return
-			except:
+			except Exception as e:
+				print(f"[DEBUG] Failed to update existing embed: {str(e)}")
 				pass
 
 		# Create new embed
+		print(f"[DEBUG] Creating new embed for queue: {q.name}")
 		message = await ctx.channel.send(embed=embed, components=[action_row])
 		ctx.qc.queue_embeds[q.name] = message.id
+		print(f"[DEBUG] Created new embed with message ID: {message.id}")
 
 		# Set up button callbacks
 		if not hasattr(ctx.qc, 'button_callbacks'):
+			print("[DEBUG] Initializing button_callbacks dictionary")
 			ctx.qc.button_callbacks = {}
 
-		ctx.qc.button_callbacks[q.name] = lambda i: _handle_queue_button(i, q.name, ctx)
+		async def button_callback(interaction):
+			print(f"\n[DEBUG] Button callback triggered for queue: {q.name}")
+			print(f"[DEBUG] Interaction user: {interaction.user.display_name}")
+			print(f"[DEBUG] Interaction custom_id: {interaction.custom_id}")
+			await _handle_queue_button(interaction, q.name, ctx)
+
+		ctx.qc.button_callbacks[q.name] = button_callback
+		print(f"[DEBUG] Set up button callback for queue: {q.name}")
+
 	except Exception as e:
+		print(f"[DEBUG] Error in queue_embed: {str(e)}")
 		await ctx.error(f"An error occurred while creating the queue embed: {str(e)}")
+
+async def _handle_queue_button(interaction, queue_name, ctx):
+	"""Handle button interactions for queue embeds"""
+	try:
+		print(f"\n[DEBUG] Handling button interaction for queue: {queue_name}")
+		print(f"[DEBUG] Interaction user: {interaction.user.display_name}")
+		print(f"[DEBUG] Interaction custom_id: {interaction.custom_id}")
+
+		q = find(lambda i: i.name.lower() == queue_name.lower(), ctx.qc.queues)
+		if not q:
+			print(f"[DEBUG] Queue not found: {queue_name}")
+			await interaction.response.send_message("Queue not found!", ephemeral=True)
+			return
+		print(f"[DEBUG] Found queue: {q.name}")
+
+		if interaction.custom_id == f"join_{queue_name}":
+			print(f"[DEBUG] Processing join request for user: {interaction.user.display_name}")
+			resp = await q.add_member(ctx, interaction.user)
+			print(f"[DEBUG] Add member response: {resp.__name__ if hasattr(resp, '__name__') else resp}")
+			if resp == bot.Qr.Success:
+				await ctx.qc.update_expire(interaction.user)
+				await interaction.response.send_message("You have joined the queue!", ephemeral=True)
+			elif resp == bot.Qr.QueueStarted:
+				await interaction.response.send_message("Queue has started!", ephemeral=True)
+			else:
+				await interaction.response.send_message("Could not join the queue!", ephemeral=True)
+		elif interaction.custom_id == f"leave_{queue_name}":
+			print(f"[DEBUG] Processing leave request for user: {interaction.user.display_name}")
+			if q.is_added(interaction.user):
+				print(f"[DEBUG] User is in queue, removing them")
+				q.pop_members(interaction.user)
+				if not any((q.is_added(interaction.user) for q in ctx.qc.queues)):
+					print(f"[DEBUG] User not in any queues, canceling expire timer")
+					bot.expire.cancel(ctx.qc, interaction.user)
+				await interaction.response.send_message("You have left the queue!", ephemeral=True)
+			else:
+				print(f"[DEBUG] User is not in queue")
+				await interaction.response.send_message("You are not in this queue!", ephemeral=True)
+		else:
+			print(f"[DEBUG] Invalid button interaction: {interaction.custom_id}")
+			await interaction.response.send_message("Invalid button interaction!", ephemeral=True)
+
+		# Update the embed
+		print(f"[DEBUG] Updating queue embed")
+		await queue_embed(ctx, queue_name)
+	except Exception as e:
+		print(f"[DEBUG] Error in button handler: {str(e)}")
+		await interaction.response.send_message(f"An error occurred: {str(e)}", ephemeral=True)
