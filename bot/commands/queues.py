@@ -293,7 +293,6 @@ async def maps(ctx, queue: str, one: bool = False):
 		)
 
 
-@bot.slash_command(name="queue_embed", description="Create a queue embed with join/leave buttons")
 async def queue_embed(ctx, queue_name: str):
 	"""Create a queue embed with join/leave buttons"""
 	print("\n==================================================")
