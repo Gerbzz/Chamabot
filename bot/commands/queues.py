@@ -9,7 +9,62 @@ from nextcord import Member, Embed, Button, ButtonStyle, ActionRow
 from nextcord.ui import View, Button
 from core.utils import error_embed, join_and, find, seconds_to_str
 import bot
+import asyncio
 
+# Dictionary to store active tasks
+queue_tasks = {}
+
+async def keep_embed_at_bottom(ctx, queue_name: str, message_id: int):
+	"""Background task to keep the queue embed at the bottom of the channel"""
+	while True:
+		try:
+			# Get the message
+			message = await ctx.channel.fetch_message(message_id)
+			
+			# Get the most recent message in the channel
+			async for last_message in ctx.channel.history(limit=1):
+				if last_message.id != message_id:
+					print(f"\n🔄 Moving queue embed to bottom for {queue_name}")
+					# Delete the old embed
+					await message.delete()
+					# Get the view
+					view = ctx.qc.queue_views[queue_name]
+					# Get the current queue
+					q = find(lambda i: i.name.lower() == queue_name.lower(), ctx.qc.queues)
+					if q:
+						# Create new embed
+						embed = Embed(
+							title=f"{q.name} Queue",
+							description="Current queued players:",
+							color=0x7289DA
+						)
+						if len(q.queue):
+							embed.add_field(
+								name="Players",
+								value="\n".join([f"• {player.display_name}" for player in q.queue]),
+								inline=False
+							)
+						else:
+							embed.add_field(
+								name="Players",
+								value="No players in queue",
+								inline=False
+							)
+						# Send new embed at bottom
+						new_message = await ctx.channel.send(embed=embed, view=view)
+						# Update the stored message ID
+						ctx.qc.queue_embeds[queue_name] = new_message.id
+						print(f"✅ Moved queue embed to bottom (new ID: {new_message.id})")
+				break
+		except Exception as e:
+			print(f"\n❌ Error in keep_embed_at_bottom for {queue_name}: {str(e)}")
+			print(f"Type: {type(e)}")
+			import traceback
+			print("Traceback:")
+			print(traceback.format_exc())
+		
+		# Wait for 30 seconds before checking again
+		await asyncio.sleep(30)
 
 async def add(ctx, queues: str = None):
 	""" add author to channel queues """
@@ -422,6 +477,14 @@ async def queue_embed(ctx, queue_name: str):
 				# Move our embed to the bottom
 				await message.edit(embed=embed, view=view)
 				print("✅ Successfully updated existing embed")
+				
+				# Start or update the background task
+				task_key = f"{ctx.channel.id}_{q.name}"
+				if task_key in queue_tasks:
+					queue_tasks[task_key].cancel()
+				queue_tasks[task_key] = asyncio.create_task(keep_embed_at_bottom(ctx, q.name, message.id))
+				print(f"✅ Started/updated background task for {q.name}")
+				
 				return
 			except Exception as e:
 				print(f"❌ Failed to update existing embed: {str(e)}")
@@ -432,6 +495,13 @@ async def queue_embed(ctx, queue_name: str):
 		message = await ctx.channel.send(embed=embed, view=view)
 		ctx.qc.queue_embeds[q.name] = message.id
 		print(f"✅ Created new embed with message ID: {message.id}")
+
+		# Start the background task
+		task_key = f"{ctx.channel.id}_{q.name}"
+		if task_key in queue_tasks:
+			queue_tasks[task_key].cancel()
+		queue_tasks[task_key] = asyncio.create_task(keep_embed_at_bottom(ctx, q.name, message.id))
+		print(f"✅ Started background task for {q.name}")
 
 		# Register the view with the bot
 		print("🔄 Registering view with bot")
