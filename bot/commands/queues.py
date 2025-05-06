@@ -12,14 +12,11 @@ import bot
 import asyncio
 import json
 
-# Dictionary to store active tasks
-queue_tasks = {}
-# Dictionary to store queue channels
-queue_channels = {}
-# Dictionary to store queue views
-queue_views = {}
-# Dictionary to store queue embeds
-queue_embeds = {}
+# Global dictionaries for queue management
+queue_tasks = {}  # Store active tasks
+queue_channels = {}  # Store queue channels
+queue_views = {}  # Store queue views
+queue_embeds = {}  # Store queue embeds
 
 async def update_queue_embed(channel, queue_name: str):
 	"""Update the queue embed with current players"""
@@ -85,11 +82,17 @@ async def keep_embed_at_bottom(channel, queue_name: str, message_id: int):
 						print(f"ℹ️ Old message {message_id} not found or already deleted")
 					
 					# Get the view
+					if queue_name not in queue_views:
+						print(f"❌ No view found for queue {queue_name}")
+						continue
+						
 					view = queue_views[queue_name]
 					# Get the current queue
 					qc = bot.queue_channels.get(channel.id)
 					if not qc:
+						print(f"❌ No queue channel found for channel {channel.id}")
 						continue
+						
 					q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
 					if q:
 						# Create new embed
