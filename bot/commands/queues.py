@@ -9,6 +9,7 @@ from nextcord import Member, Embed, Button, ButtonStyle, ActionRow
 from nextcord.ui import View, Button
 from core.utils import error_embed, join_and, find, seconds_to_str
 from core.client import dc
+from core.console import log
 import bot
 import asyncio
 import json
@@ -158,9 +159,9 @@ async def move_embed_to_bottom(channel, queue_name: str, message_id: int):
 		
 		# Start or update the background task
 		task_key = f"{channel.id}_{queue_name}"
-		if task_key in queue_tasks:
-			queue_tasks[task_key].cancel()
-		queue_tasks[task_key] = asyncio.create_task(keep_embed_at_bottom(channel, queue_name, new_message.id))
+		if task_key in bot.queue_tasks:
+			bot.queue_tasks[task_key].cancel()
+		bot.queue_tasks[task_key] = asyncio.create_task(keep_embed_at_bottom(channel, queue_name, new_message.id))
 		
 		return new_message.id
 	except Exception as e:
@@ -570,9 +571,9 @@ async def queue_embed(ctx, queue_name: str):
 		
 		# Start or update the background task
 		task_key = f"{ctx.channel.id}_{queue_name}"
-		if task_key in queue_tasks:
-			queue_tasks[task_key].cancel()
-		queue_tasks[task_key] = asyncio.create_task(keep_embed_at_bottom(ctx.channel, q.name, message.id))
+		if task_key in bot.queue_tasks:
+			bot.queue_tasks[task_key].cancel()
+		bot.queue_tasks[task_key] = asyncio.create_task(keep_embed_at_bottom(ctx.channel, q.name, message.id))
 		print(f"✅ Started/updated background task for {q.name}")
 		
 		# Save queue data
@@ -697,9 +698,9 @@ async def recreate_queue_embeds():
 				
 				# Start background task
 				task_key = f"{channel_id}_{queue_name}"
-				if task_key in queue_tasks:
-					queue_tasks[task_key].cancel()
-				queue_tasks[task_key] = asyncio.create_task(keep_embed_at_bottom(channel, queue_name, new_message.id))
+				if task_key in bot.queue_tasks:
+					bot.queue_tasks[task_key].cancel()
+				bot.queue_tasks[task_key] = asyncio.create_task(keep_embed_at_bottom(channel, queue_name, new_message.id))
 				print(f"✅ Recreated queue embed for {queue_name}")
 				
 			except Exception as e:

@@ -26,6 +26,7 @@ active_matches = []
 waiting_reactions = dict()  # {message.id: function}
 allow_offline = []  # [user_id]
 auto_ready = dict()  # {user.id: timestamp}
+queue_tasks = dict()  # {channel_id_queue_name: task}
 
 
 def background_context(coro):
