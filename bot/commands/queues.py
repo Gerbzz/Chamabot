@@ -69,6 +69,71 @@ async def update_queue_embed(channel, queue_name: str):
 	except Exception as e:
 		print(f"Error in update_queue_embed: {str(e)}")
 
+async def move_embed_to_bottom(channel, queue_name: str, message_id: int):
+	"""Move the queue embed to the bottom of the channel"""
+	try:
+		# Try to delete the old embed if it exists
+		try:
+			old_message = await channel.fetch_message(message_id)
+			await old_message.delete()
+			print(f"🗑️ Deleted old embed message {message_id}")
+		except Exception as e:
+			print(f"ℹ️ Old message {message_id} not found or already deleted")
+		
+		# Get the queue channel and queue
+		qc = bot.queue_channels.get(channel.id)
+		if not qc:
+			print(f"❌ No queue channel found for channel {channel.id}")
+			return
+			
+		q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
+		if not q:
+			print(f"❌ Queue {queue_name} not found")
+			return
+			
+		# Create new view if it doesn't exist
+		if queue_name not in qc.queue_views:
+			print(f"📝 Creating new view for queue {queue_name}")
+			view = View(timeout=None)
+			join_button = Button(label="Join", style=ButtonStyle.green, custom_id=f"join_{queue_name}")
+			leave_button = Button(label="Leave", style=ButtonStyle.red, custom_id=f"leave_{queue_name}")
+			join_button.callback = join_callback
+			leave_button.callback = leave_callback
+			view.add_item(join_button)
+			view.add_item(leave_button)
+			qc.queue_views[queue_name] = view
+		else:
+			view = qc.queue_views[queue_name]
+		
+		# Create new embed
+		embed = Embed(
+			title=f"{q.name} Queue",
+			description="Current queued players:",
+			color=0x7289DA
+		)
+		if len(q.queue):
+			embed.add_field(
+				name="Players",
+				value="\n".join([f"• {player.display_name}" for player in q.queue]),
+				inline=False
+			)
+		else:
+			embed.add_field(
+				name="Players",
+				value="No players in queue",
+				inline=False
+			)
+		
+		# Send new embed at bottom
+		new_message = await channel.send(embed=embed, view=view)
+		# Update the stored message ID
+		qc.queue_embeds[queue_name] = new_message.id
+		print(f"✅ Moved queue embed to bottom (new ID: {new_message.id})")
+		return new_message.id
+	except Exception as e:
+		print(f"❌ Error moving embed to bottom: {str(e)}")
+		return None
+
 async def keep_embed_at_bottom(channel, queue_name: str, message_id: int):
 	"""Background task to keep the queue embed at the bottom of the channel"""
 	while True:
@@ -78,63 +143,9 @@ async def keep_embed_at_bottom(channel, queue_name: str, message_id: int):
 				# Only move to bottom if we're not already there
 				if last_message.id != message_id:
 					print(f"\n Moving queue embed to bottom for {queue_name}")
-					try:
-						# Try to delete the old embed if it exists
-						old_message = await channel.fetch_message(message_id)
-						await old_message.delete()
-						print(f"🗑️ Deleted old embed message {message_id}")
-					except Exception as e:
-						print(f"ℹ️ Old message {message_id} not found or already deleted")
-					
-					# Get the queue channel and queue
-					qc = bot.queue_channels.get(channel.id)
-					if not qc:
-						print(f"❌ No queue channel found for channel {channel.id}")
-						continue
-						
-					q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
-					if not q:
-						print(f"❌ Queue {queue_name} not found")
-						continue
-						
-					# Create new view if it doesn't exist
-					if queue_name not in qc.queue_views:
-						print(f"📝 Creating new view for queue {queue_name}")
-						view = View(timeout=None)
-						join_button = Button(label="Join", style=ButtonStyle.green, custom_id=f"join_{queue_name}")
-						leave_button = Button(label="Leave", style=ButtonStyle.red, custom_id=f"leave_{queue_name}")
-						join_button.callback = join_callback
-						leave_button.callback = leave_callback
-						view.add_item(join_button)
-						view.add_item(leave_button)
-						qc.queue_views[queue_name] = view
-					else:
-						view = qc.queue_views[queue_name]
-					
-					# Create new embed
-					embed = Embed(
-						title=f"{q.name} Queue",
-						description="Current queued players:",
-						color=0x7289DA
-					)
-					if len(q.queue):
-						embed.add_field(
-							name="Players",
-							value="\n".join([f"• {player.display_name}" for player in q.queue]),
-							inline=False
-						)
-					else:
-						embed.add_field(
-							name="Players",
-							value="No players in queue",
-							inline=False
-						)
-					
-					# Send new embed at bottom
-					new_message = await channel.send(embed=embed, view=view)
-					# Update the stored message ID
-					qc.queue_embeds[queue_name] = new_message.id
-					print(f"✅ Moved queue embed to bottom (new ID: {new_message.id})")
+					new_message_id = await move_embed_to_bottom(channel, queue_name, message_id)
+					if new_message_id:
+						message_id = new_message_id
 				else:
 					# If we're already at the bottom, just update the content
 					try:
