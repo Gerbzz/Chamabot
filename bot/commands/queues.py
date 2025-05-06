@@ -1013,9 +1013,18 @@ async def global_leave_callback(interaction):
 async def update_global_queue_embed(channel, queue_name, queue_channel_id=None):
 	"""Update a global queue embed without posting to chat"""
 	try:
+		print("\n==================================================")
+		print("🔄 UPDATE GLOBAL QUEUE EMBED")
+		print("==================================================")
+		print(f"🎯 Queue: {queue_name}")
+		print(f"📝 Channel: {channel.name} ({channel.id})")
+		print(f"🔗 Queue Channel ID: {queue_channel_id}")
+		print(f"🗃️ Current global embeds: {list(global_queue_embeds.keys())}")
+		
 		# If no queue_channel_id is provided, assume it's the same as the channel
 		if queue_channel_id is None:
 			queue_channel_id = channel.id
+			print(f"ℹ️ Using channel ID as queue channel ID: {queue_channel_id}")
 		
 		# Get the queue channel
 		qc = bot.queue_channels.get(queue_channel_id)
@@ -1036,6 +1045,9 @@ async def update_global_queue_embed(channel, queue_name, queue_channel_id=None):
 		# Update all global embeds for this queue
 		for key, message_id in list(global_queue_embeds.items()):
 			parts = key.split('_')
+			print(f"📋 Processing key: {key}")
+			print(f"📊 Parts: {parts}")
+			
 			if len(parts) >= 4 and parts[0] == "global" and parts[1] == queue_name:
 				try:
 					embed_channel_id = int(parts[2])
@@ -1391,6 +1403,41 @@ def load_global_queue_data_from_state(data):
 		try:
 			for key, message_id in data['global_queue_embeds'].items():
 				global_queue_embeds[key] = message_id
+				
+				# Register view for this message
+				try:
+					parts = key.split('_')
+					if len(parts) >= 4 and parts[0] == "global":
+						queue_name = parts[1]
+						queue_channel_id = int(parts[3])
+						
+						# Create and register the view
+						view = View(timeout=None)
+						
+						# Join button
+						join_button = Button(
+							style=ButtonStyle.green.value,
+							label="Join Queue",
+							custom_id=f"global_join_{queue_name}_{queue_channel_id}"
+						)
+						join_button.callback = global_join_callback
+						view.add_item(join_button)
+						
+						# Leave button
+						leave_button = Button(
+							style=ButtonStyle.red.value,
+							label="Leave Queue",
+							custom_id=f"global_leave_{queue_name}_{queue_channel_id}"
+						)
+						leave_button.callback = global_leave_callback
+						view.add_item(leave_button)
+						
+						# Register the view
+						dc.add_view(view, message_id=message_id)
+				except Exception as e:
+					print(f"❌ Error registering view for global embed {key}: {str(e)}")
+					continue
+					
 			print("✅ Loaded global queue embeds from saved state")
 		except Exception as e:
 			print(f"❌ Error loading global queue embeds: {str(e)}")
