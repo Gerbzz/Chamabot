@@ -6,7 +6,7 @@ __all__ = [
 
 import time
 from random import choice
-from nextcord import Member, Embed, Button, ButtonStyle, ActionRow, TextChannel
+from nextcord import Member, Embed, Button, ButtonStyle, ActionRow, TextChannel, NotFound, Forbidden
 from nextcord.ui import View, Button
 from core.utils import error_embed, join_and, find, seconds_to_str
 from core.client import dc
