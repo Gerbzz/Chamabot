@@ -436,14 +436,27 @@ async def queue_embed(ctx, queue_name: str):
 		q = None
 		source_qc = None
 		source_channel_id = None
+		
+		# First, try to find the queue in any channel
 		for channel_id, qc in server_queue_channels.items():
 			found_q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
 			if found_q:
 				q = found_q
 				source_qc = qc
 				source_channel_id = channel_id
+				print(f"✅ Found queue in channel ID {channel_id}")
 				break
-				
+		
+		# If queue not found, try to find it in the current channel
+		if not q and ctx.channel.id in bot.queue_channels:
+			current_qc = bot.queue_channels[ctx.channel.id]
+			found_q = find(lambda i: i.name.lower() == queue_name.lower(), current_qc.queues)
+			if found_q:
+				q = found_q
+				source_qc = current_qc
+				source_channel_id = ctx.channel.id
+				print(f"✅ Found queue in current channel")
+		
 		if not q:
 			print("❌ Queue not found in this server")
 			await ctx.error(f"Queue {queue_name} not found in this server")
@@ -472,6 +485,10 @@ async def queue_embed(ctx, queue_name: str):
 			current_qc.queues = source_qc.queues
 			current_qc.queue_views = {}
 			current_qc.queue_embeds = {}
+		else:
+			# Update existing QueueChannel with source channel's queues
+			print(f"📝 Updating existing QueueChannel with source channel's queues")
+			current_qc.queues = source_qc.queues
 		
 		# Create or get the view
 		if queue_name in current_qc.queue_views:
