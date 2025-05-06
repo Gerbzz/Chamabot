@@ -58,9 +58,10 @@ async def update_queue_embed(channel, queue_name: str):
 		if queue_name in queue_embeds:
 			try:
 				message = await channel.fetch_message(queue_embeds[queue_name])
-				await message.edit(embed=embed, view=view)
+				await message.edit(embed=embed)
+				print(f"✅ Updated queue embed for {queue_name}")
 			except Exception as e:
-				print(f"Error updating embed: {str(e)}")
+				print(f"❌ Error updating embed: {str(e)}")
 				
 	except Exception as e:
 		print(f"Error in update_queue_embed: {str(e)}")
@@ -71,53 +72,53 @@ async def keep_embed_at_bottom(channel, queue_name: str, message_id: int):
 		try:
 			# Get the most recent message in the channel
 			async for last_message in channel.history(limit=1):
-				if last_message.id != message_id:
-					print(f"\n🔄 Moving queue embed to bottom for {queue_name}")
-					try:
-						# Try to delete the old embed if it exists
-						old_message = await channel.fetch_message(message_id)
-						await old_message.delete()
-						print(f"🗑️ Deleted old embed message {message_id}")
-					except Exception as e:
-						print(f"ℹ️ Old message {message_id} not found or already deleted")
+				# Always move to bottom every 30 seconds
+				print(f"\n🔄 Moving queue embed to bottom for {queue_name}")
+				try:
+					# Try to delete the old embed if it exists
+					old_message = await channel.fetch_message(message_id)
+					await old_message.delete()
+					print(f"🗑️ Deleted old embed message {message_id}")
+				except Exception as e:
+					print(f"ℹ️ Old message {message_id} not found or already deleted")
+				
+				# Get the view
+				if queue_name not in queue_views:
+					print(f"❌ No view found for queue {queue_name}")
+					continue
 					
-					# Get the view
-					if queue_name not in queue_views:
-						print(f"❌ No view found for queue {queue_name}")
-						continue
-						
-					view = queue_views[queue_name]
-					# Get the current queue
-					qc = bot.queue_channels.get(channel.id)
-					if not qc:
-						print(f"❌ No queue channel found for channel {channel.id}")
-						continue
-						
-					q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
-					if q:
-						# Create new embed
-						embed = Embed(
-							title=f"{q.name} Queue",
-							description="Current queued players:",
-							color=0x7289DA
+				view = queue_views[queue_name]
+				# Get the current queue
+				qc = bot.queue_channels.get(channel.id)
+				if not qc:
+					print(f"❌ No queue channel found for channel {channel.id}")
+					continue
+					
+				q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
+				if q:
+					# Create new embed
+					embed = Embed(
+						title=f"{q.name} Queue",
+						description="Current queued players:",
+						color=0x7289DA
+					)
+					if len(q.queue):
+						embed.add_field(
+							name="Players",
+							value="\n".join([f"• {player.display_name}" for player in q.queue]),
+							inline=False
 						)
-						if len(q.queue):
-							embed.add_field(
-								name="Players",
-								value="\n".join([f"• {player.display_name}" for player in q.queue]),
-								inline=False
-							)
-						else:
-							embed.add_field(
-								name="Players",
-								value="No players in queue",
-								inline=False
-							)
-						# Send new embed at bottom
-						new_message = await channel.send(embed=embed, view=view)
-						# Update the stored message ID
-						queue_embeds[queue_name] = new_message.id
-						print(f"✅ Moved queue embed to bottom (new ID: {new_message.id})")
+					else:
+						embed.add_field(
+							name="Players",
+							value="No players in queue",
+							inline=False
+						)
+					# Send new embed at bottom
+					new_message = await channel.send(embed=embed, view=view)
+					# Update the stored message ID
+					queue_embeds[queue_name] = new_message.id
+					print(f"✅ Moved queue embed to bottom (new ID: {new_message.id})")
 				break
 		except Exception as e:
 			print(f"\n❌ Error in keep_embed_at_bottom for {queue_name}: {str(e)}")
