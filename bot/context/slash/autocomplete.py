@@ -15,18 +15,16 @@ async def queues(interaction: Interaction, queue: str) -> List[str]:
 		all_queues = []
 		for qc in bot.queue_channels.values():
 			for q in qc.queues:
-				if q.name.lower().startswith(queue.lower()):
-					# Add channel information in parentheses
-					channel = interaction.client.get_channel(qc.id)  # Get the actual TextChannel object
-					channel_name = channel.name if channel else "unknown-channel"
-					all_queues.append(f"{q.name} (#{channel_name})")
-		return all_queues[:25]  # Limit to 25 results
+				# Add channel information in parentheses
+				channel = interaction.client.get_channel(qc.id)
+				channel_name = channel.name if channel else "unknown-channel"
+				display_name = f"{q.name} (#{channel_name})"
+				if queue.lower() in display_name.lower():
+					all_queues.append(display_name)
+		return all_queues[:25]
 	
-	# Standard behavior for commands operating on the current channel only
-	if (qc := bot.queue_channels.get(interaction.channel_id)) is not None:
-		return [q.name for q in qc.queues if q.name.startswith(queue)]
-	else:
-		return []
+	# If we're not in a queue channel but using global commands, return empty
+	return []
 
 
 async def qc_variables(interaction: Interaction, variable: str) -> List[str]:
