@@ -324,4 +324,5 @@ async def queue_embed(ctx, queue_name: str):
 
 		ctx.qc.button_callbacks[queue_name] = lambda i: _handle_queue_button(i, queue_name, ctx)
 	except Exception as e:
+		print(f"Error in queue_embed: {str(e)}")  # Add more detailed error logging
 		await ctx.error(f"An error occurred while creating the queue embed: {str(e)}")
