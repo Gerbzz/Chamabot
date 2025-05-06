@@ -96,8 +96,8 @@ async def update_queue_embed(ctx, queue_name):
 				await message.edit(embed=embed, view=view)
 				print(f"✅ Updated queue embed for {queue_name}")
 				
-				# Also update any global embeds
-				await update_global_queue_embed(ctx.channel, queue_name)
+				# Also update any global embeds, passing the queue channel ID
+				await update_global_queue_embed(ctx.channel, queue_name, ctx.channel.id)
 				return
 			except discord.NotFound:
 				print(f"❌ Message {message_id} not found, will create new one")
@@ -122,8 +122,8 @@ async def update_queue_embed(ctx, queue_name):
 			keep_embed_at_bottom(ctx.channel, queue_name, new_message.id)
 		)
 
-		# Also update any global embeds
-		await update_global_queue_embed(ctx.channel, queue_name)
+		# Also update any global embeds, passing the queue channel ID
+		await update_global_queue_embed(ctx.channel, queue_name, ctx.channel.id)
 
 	except Exception as e:
 		print(f"❌ Error updating queue embed: {str(e)}")
@@ -239,8 +239,8 @@ async def keep_embed_at_bottom(channel, queue_name, message_id):
 					# Update the task to track the new message
 					message_id = new_message.id
 
-					# Also update any global embeds
-					await update_global_queue_embed(channel, queue_name)
+					# Also update any global embeds, passing the queue channel ID
+					await update_global_queue_embed(channel, queue_name, ctx.channel.id)
 
 				except Exception as e:
 					print(f"❌ Error moving embed to bottom: {str(e)}")
@@ -929,22 +929,23 @@ async def global_join_callback(interaction):
 		result = await q.add_member(ctx, interaction.user, silent=True)
 		
 		# Update both normal and global embeds
-		# First update the normal queue embed in the queue's channel
-		queue_ctx = bot.context.slash.context.SlashContext(qc, interaction)
-		await update_queue_embed(queue_ctx, queue_name)
-		
-		# Then update all global embeds for this queue on all channels
-		for key, message_id in list(global_queue_embeds.items()):
-			if queue_name in key and str(queue_channel_id) in key:
-				parts = key.split('_')
-				if len(parts) >= 4:
-					embed_channel_id = int(parts[2])
-					try:
-						channel = dc.get_channel(embed_channel_id)
-						if channel:
-							await update_global_queue_embed(channel, queue_name, queue_channel_id)
-					except Exception as e:
-						print(f"Error updating global embed {key}: {str(e)}")
+		if result == bot.Qr.Success or result == bot.Qr.QueueStarted:
+			# First update the normal queue embed in the queue's channel
+			queue_ctx = bot.context.slash.context.SlashContext(qc, interaction)
+			await update_queue_embed(queue_ctx, queue_name)
+			
+			# Then update all global embeds for this queue on all channels
+			for key, message_id in list(global_queue_embeds.items()):
+				if queue_name in key and str(queue_channel_id) in key:
+					parts = key.split('_')
+					if len(parts) >= 4:
+						embed_channel_id = int(parts[2])
+						try:
+							channel = dc.get_channel(embed_channel_id)
+							if channel:
+								await update_global_queue_embed(channel, queue_name, queue_channel_id)
+						except Exception as e:
+							print(f"Error updating global embed {key}: {str(e)}")
 		
 		# Send an ephemeral response to the user
 		if result == bot.Qr.Success:
