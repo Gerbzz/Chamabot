@@ -142,25 +142,17 @@ async def load_state():
 	if 'expire' in data:
 		await bot.expire.load_json(data['expire'])
 
-	# Finally, recreate queue embeds
+	# Store queue embed data without recreating embeds
 	if 'queue_embeds' in data:
 		for channel_id, queues in data['queue_embeds'].items():
 			channel_id = int(channel_id)
 			if channel_id in bot.queue_channels:
 				qc = bot.queue_channels[channel_id]
-				channel = dc.get_channel(channel_id)
-				if channel:
-					for queue_name, message_id in queues.items():
-						channel_key = f"{queue_name}_{channel_id}"
-						qc.queue_embeds[channel_key] = message_id
-						# Start background task to keep embed at bottom
-						task_key = f"{channel_id}_{queue_name}"
-						if task_key in bot.queue_tasks:
-							bot.queue_tasks[task_key].cancel()
-						bot.queue_tasks[task_key] = asyncio.create_task(
-							bot.commands.queues.keep_embed_at_bottom(channel, queue_name, message_id)
-						)
-						log.info(f"Started background task for queue {queue_name} in channel {channel.name}")
+				for queue_name, message_id in queues.items():
+					channel_key = f"{queue_name}_{channel_id}"
+					qc.queue_embeds[channel_key] = message_id
+					# Do not automatically start background tasks or recreate embeds
+					# They will be recreated when the queue_embed command is used
 
 	log.info("State loaded successfully")
 

@@ -1,6 +1,6 @@
 __all__ = [
 	'add', 'remove', 'who', 'add_player', 'remove_player', 'promote', 'start', 'split',
-	'reset', 'subscribe', 'server', 'maps', 'queue_embed', 'recreate_queue_embeds'
+	'reset', 'subscribe', 'server', 'maps', 'queue_embed', 'recreate_queue_embeds', 'remove_queue_embed'
 ]
 
 import time
@@ -790,3 +790,67 @@ async def leave_callback(interaction):
 	except Exception as e:
 		print(f"Error in leave_callback: {str(e)}")
 		await interaction.response.send_message("An error occurred while leaving the queue.", ephemeral=True)
+
+async def remove_queue_embed(ctx, queue_name: str):
+	"""Remove a queue embed from the channel"""
+	print("\n==================================================")
+	print("🎮 REMOVE QUEUE EMBED")
+	print("==================================================")
+	print(f"🎯 Queue: {queue_name}")
+	print(f"👤 Context type: {type(ctx)}")
+	
+	try:
+		# Get the current channel's queue channel
+		current_qc = bot.queue_channels.get(ctx.channel.id)
+		if not current_qc:
+			print("❌ Current channel is not a queue channel")
+			await ctx.error("This channel is not a queue channel")
+			return
+			
+		# Find the queue in the current channel
+		q = find(lambda i: i.name.lower() == queue_name.lower(), current_qc.queues)
+		if not q:
+			print("❌ Queue not found in this channel")
+			await ctx.error(f"Queue {queue_name} not found in this channel")
+			return
+		
+		# Create channel-specific key for tracking
+		channel_key = f"{queue_name}_{ctx.channel.id}"
+		
+		# Check if we have a message for this queue in this channel
+		if channel_key in current_qc.queue_embeds:
+			try:
+				# Try to delete the existing message
+				message_id = current_qc.queue_embeds[channel_key]
+				message = await ctx.channel.fetch_message(message_id)
+				await message.delete()
+				print(f"✅ Deleted queue embed for {queue_name}")
+				
+				# Remove the message ID from tracking
+				del current_qc.queue_embeds[channel_key]
+				
+				# Cancel the background task if it exists
+				task_key = f"{ctx.channel.id}_{queue_name}"
+				if task_key in bot.queue_tasks:
+					bot.queue_tasks[task_key].cancel()
+					del bot.queue_tasks[task_key]
+					print(f"✅ Cancelled background task for {queue_name}")
+				
+				# Save queue data
+				save_queue_data()
+				
+				await ctx.reply(f"Queue embed for **{queue_name}** has been removed.")
+			except Exception as e:
+				print(f"❌ Error deleting message: {str(e)}")
+				await ctx.error(f"Failed to delete queue embed: {str(e)}")
+		else:
+			print("❌ No queue embed found for this queue")
+			await ctx.error(f"No queue embed found for {queue_name}")
+	
+	except Exception as e:
+		print(f"❌ Error in remove_queue_embed: {str(e)}")
+		print(f"Type: {type(e)}")
+		import traceback
+		print("Traceback:")
+		print(traceback.format_exc())
+		await ctx.error(f"An error occurred while removing the queue embed: {str(e)}")

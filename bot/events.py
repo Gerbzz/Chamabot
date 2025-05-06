@@ -81,47 +81,9 @@ async def on_ready():
 	await bot.load_state()
 	log.info("Done.")
 
-	if not bot.bot_ready:
-		bot.bot_ready = True
-		log.info("Registering existing queue embed views...")
-		for qc in bot.queue_channels.values():
-			if (channel := dc.get_channel(qc.id)) is not None:
-				for queue in qc.queues:
-					channel_key = f"{queue.name}_{channel.id}"
-					if channel_key in qc.queue_embeds:
-						try:
-							# Create buttons for the queue
-							join_button = Button(
-								style=ButtonStyle.green.value,
-								label="Join",
-								custom_id=f"join_{queue.name}"
-							)
-							leave_button = Button(
-								style=ButtonStyle.red.value,
-								label="Leave",
-								custom_id=f"leave_{queue.name}"
-							)
-
-							# Create the view and add buttons
-							view = View(timeout=None)
-							join_button.callback = join_callback
-							leave_button.callback = leave_callback
-							view.add_item(join_button)
-							view.add_item(leave_button)
-
-							# Register the view with the bot
-							dc.add_view(view, message_id=qc.queue_embeds[channel_key])
-							log.info(f"Registered view for queue {queue.name} in channel {channel.name}")
-							
-							# Start background task to keep embed at bottom
-							task_key = f"{channel.id}_{queue.name}"
-							if task_key in bot.queue_tasks:
-								bot.queue_tasks[task_key].cancel()
-							bot.queue_tasks[task_key] = asyncio.create_task(keep_embed_at_bottom(channel, queue.name, qc.queue_embeds[channel_key]))
-							log.info(f"Started background task for queue {queue.name} in channel {channel.name}")
-						except Exception as e:
-							log.error(f"Failed to register view for queue {queue.name} in channel {channel.name}: {str(e)}")
-		log.info("Queue embed view registration complete.")
+	# Don't automatically register queue embed views on startup
+	# Users need to manually create queue embeds using the /queue-embed command
+	bot.bot_ready = True
 
 
 @dc.event
