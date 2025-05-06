@@ -38,7 +38,7 @@ async def update_queue_embed(ctx, queue_name):
 			log.error(f"Could not find queue {queue_name}")
 			return
 
-		# Create the embed
+		# Create the embed with the same style as global embeds
 		embed = Embed(
 			title=f"{q.name} Queue",
 			description="Current queued players:",
@@ -56,11 +56,29 @@ async def update_queue_embed(ctx, queue_name):
 				value="No players in queue",
 				inline=False
 			)
+			
+		# Add queue info like in global embeds
+		embed.add_field(
+			name="Status",
+			value=f"{len(q.queue)}/{q.cfg.size} players",
+			inline=True
+		)
+		
+		# Add footer with timestamp
+		embed.set_footer(text=f"Last updated: {time.strftime('%H:%M:%S')}")
 
 		# Create the view
 		view = View(timeout=None)
-		join_button = Button(label="Join", style=ButtonStyle.green.value, custom_id=f"join_{queue_name}")
-		leave_button = Button(label="Leave", style=ButtonStyle.red.value, custom_id=f"leave_{queue_name}")
+		join_button = Button(
+			style=ButtonStyle.green.value,
+			label="Join Queue",
+			custom_id=f"join_{queue_name}"
+		)
+		leave_button = Button(
+			style=ButtonStyle.red.value,
+			label="Leave Queue",
+			custom_id=f"leave_{queue_name}"
+		)
 		join_button.callback = join_callback
 		leave_button.callback = leave_callback
 		view.add_item(join_button)
@@ -782,8 +800,9 @@ async def join_callback(interaction):
 		# Add the user to the queue
 		await add(ctx, queue_name)
 		
-		# Update the queue embed
+		# Update both the normal queue embed and any global embeds
 		await update_queue_embed(ctx, queue_name)
+		await update_global_queue_embed(channel, queue_name, qc.id)
 			
 	except Exception as e:
 		print(f"Error in join_callback: {str(e)}")
@@ -808,8 +827,9 @@ async def leave_callback(interaction):
 		# Remove the user from the queue
 		await remove(ctx, queue_name)
 		
-		# Update the queue embed
+		# Update both the normal queue embed and any global embeds
 		await update_queue_embed(ctx, queue_name)
+		await update_global_queue_embed(channel, queue_name, qc.id)
 			
 	except Exception as e:
 		print(f"Error in leave_callback: {str(e)}")
@@ -916,15 +936,17 @@ async def global_join_callback(interaction):
 		# Add the user to the queue (directly manipulate the queue)
 		result = await q.add_member(ctx, interaction.user, silent=True)
 		
-		# Only update the embed, don't post to chat
-		current_channel = interaction.channel
+		# Update both normal and global embeds
+		# First update the normal queue embed in the queue's channel
+		queue_ctx = bot.context.slash.context.SlashContext(qc, interaction)
+		await update_queue_embed(queue_ctx, queue_name)
 		
-		# Update all global embeds for this queue on all channels
+		# Then update all global embeds for this queue on all channels
 		for key, message_id in list(global_queue_embeds.items()):
 			if queue_name in key and str(queue_channel_id) in key:
 				parts = key.split('_')
 				if len(parts) >= 4:
-					embed_channel_id = int(parts[3])
+					embed_channel_id = int(parts[2])
 					try:
 						channel = dc.get_channel(embed_channel_id)
 						if channel:
@@ -988,12 +1010,17 @@ async def global_leave_callback(interaction):
 		# Remove the user from the queue
 		q.pop_members(interaction.user)
 		
-		# Update all global embeds for this queue on all channels
+		# Update both normal and global embeds
+		# First update the normal queue embed in the queue's channel
+		queue_ctx = bot.context.slash.context.SlashContext(qc, interaction)
+		await update_queue_embed(queue_ctx, queue_name)
+		
+		# Then update all global embeds for this queue on all channels
 		for key, message_id in list(global_queue_embeds.items()):
 			if queue_name in key and str(queue_channel_id) in key:
 				parts = key.split('_')
 				if len(parts) >= 4:
-					embed_channel_id = int(parts[3])
+					embed_channel_id = int(parts[2])
 					try:
 						channel = dc.get_channel(embed_channel_id)
 						if channel:
