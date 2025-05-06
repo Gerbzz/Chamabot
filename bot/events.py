@@ -101,8 +101,8 @@ async def on_ready():
 							)
 
 							# Add callbacks to the buttons
-							join_button.callback = lambda i: join_queue_callback(i, queue)
-							leave_button.callback = lambda i: leave_queue_callback(i, queue)
+							join_button.callback = lambda i, q=queue: join_callback(i)
+							leave_button.callback = lambda i, q=queue: leave_callback(i)
 
 							# Create the view
 							view = View(timeout=None)

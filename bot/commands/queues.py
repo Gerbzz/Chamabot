@@ -460,7 +460,6 @@ async def queue_embed(ctx, queue_name: str):
 	print("==================================================")
 	print(f"🎯 Queue: {queue_name}")
 	print(f"👤 Context type: {type(ctx)}")
-	print(f"🏠 Server ID: {ctx.interaction.guild.id}")
 	
 	try:
 		# Get the current channel's queue channel
