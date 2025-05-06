@@ -148,7 +148,10 @@ async def keep_embed_at_bottom(channel, queue_name, message_id):
 
 			# Check if this message is still registered
 			channel_key = f"{queue_name}_{channel.id}"
-			if qc.queue_embeds.get(channel_key) != message_id:
+			current_message_id = qc.queue_embeds.get(channel_key)
+			
+			# If our message ID doesn't match the current one, stop the task
+			if current_message_id != message_id:
 				print(f"ℹ️ Message {message_id} is no longer the active embed for {queue_name}, stopping background task")
 				return
 
@@ -160,6 +163,39 @@ async def keep_embed_at_bottom(channel, queue_name, message_id):
 					# If our message is already the last one, just update it
 					if last_message.id == message_id:
 						is_at_bottom = True
+						# Update the existing message instead of creating a new one
+						try:
+							message = await channel.fetch_message(message_id)
+							embed = Embed(
+								title=f"{q.name} Queue",
+								description="Current queued players:",
+								color=0x7289DA
+							)
+							if len(q.queue):
+								embed.add_field(
+									name="Players",
+									value="\n".join([f"• {player.display_name}" for player in q.queue]),
+									inline=False
+								)
+							else:
+								embed.add_field(
+									name="Players",
+									value="No players in queue",
+									inline=False
+								)
+
+							# Add queue info
+							embed.add_field(
+								name="Status",
+								value=f"{len(q.queue)}/{q.cfg.size} players",
+								inline=True
+							)
+
+							# Add footer with timestamp
+							embed.set_footer(text=f"Last updated: {time.strftime('%H:%M:%S')}")
+							await message.edit(embed=embed)
+						except Exception as e:
+							print(f"❌ Error updating message: {str(e)}")
 						break
 			except Exception as e:
 				print(f"❌ Error checking if message is at bottom: {str(e)}")
@@ -167,87 +203,94 @@ async def keep_embed_at_bottom(channel, queue_name, message_id):
 				continue
 
 			if not is_at_bottom:
-				# Move the embed to the bottom
+				# Before moving to bottom, verify the message still exists and is still registered
 				try:
-					# Create the embed
-					embed = Embed(
-						title=f"{q.name} Queue",
-						description="Current queued players:",
-						color=0x7289DA
-					)
-					if len(q.queue):
-						embed.add_field(
-							name="Players",
-							value="\n".join([f"• {player.display_name}" for player in q.queue]),
-							inline=False
+					old_message = await channel.fetch_message(message_id)
+					if old_message and qc.queue_embeds.get(channel_key) == message_id:
+						# Create the embed
+						embed = Embed(
+							title=f"{q.name} Queue",
+							description="Current queued players:",
+							color=0x7289DA
 						)
-					else:
+						if len(q.queue):
+							embed.add_field(
+								name="Players",
+								value="\n".join([f"• {player.display_name}" for player in q.queue]),
+								inline=False
+							)
+						else:
+							embed.add_field(
+								name="Players",
+								value="No players in queue",
+								inline=False
+							)
+
+						# Add queue info
 						embed.add_field(
-							name="Players",
-							value="No players in queue",
-							inline=False
+							name="Status",
+							value=f"{len(q.queue)}/{q.cfg.size} players",
+							inline=True
 						)
 
-					# Add queue info
-					embed.add_field(
-						name="Status",
-						value=f"{len(q.queue)}/{q.cfg.size} players",
-						inline=True
-					)
+						# Add footer with timestamp
+						embed.set_footer(text=f"Last updated: {time.strftime('%H:%M:%S')}")
 
-					# Add footer with timestamp
-					embed.set_footer(text=f"Last updated: {time.strftime('%H:%M:%S')}")
+						# Create the view
+						view = View(timeout=None)
+						join_button = Button(
+							label="Join Queue",
+							style=ButtonStyle.green.value,
+							custom_id=f"join_{queue_name}"
+						)
+						leave_button = Button(
+							label="Leave Queue",
+							style=ButtonStyle.red.value,
+							custom_id=f"leave_{queue_name}"
+						)
+						join_button.callback = join_callback
+						leave_button.callback = leave_callback
+						view.add_item(join_button)
+						view.add_item(leave_button)
+						qc.queue_views[queue_name] = view
 
-					# Create the view
-					view = View(timeout=None)
-					join_button = Button(
-						label="Join Queue",
-						style=ButtonStyle.green.value,
-						custom_id=f"join_{queue_name}"
-					)
-					leave_button = Button(
-						label="Leave Queue",
-						style=ButtonStyle.red.value,
-						custom_id=f"leave_{queue_name}"
-					)
-					join_button.callback = join_callback
-					leave_button.callback = leave_callback
-					view.add_item(join_button)
-					view.add_item(leave_button)
-					qc.queue_views[queue_name] = view
-
-					# Try to delete the old embed
-					try:
-						old_message = await channel.fetch_message(message_id)
+						# Delete the old message only after we confirm it exists
 						await old_message.delete()
 						print(f"🗑️ Deleted old embed message {message_id}")
-					except discord.NotFound:
-						print(f"ℹ️ Old message {message_id} not found or already deleted")
-					except discord.Forbidden:
-						print(f"❌ Bot lacks permissions to delete message {message_id}")
-					except Exception as e:
-						print(f"❌ Error deleting old message: {str(e)}")
 
-					# Send new message at the bottom
-					new_message = await channel.send(embed=embed, view=view)
-					qc.queue_embeds[channel_key] = new_message.id
-					print(f"✅ Moved queue embed to bottom (new ID: {new_message.id})")
+						# Send new message at the bottom
+						new_message = await channel.send(embed=embed, view=view)
+						
+						# Update tracking only if our task is still the active one
+						if qc.queue_embeds.get(channel_key) == message_id:
+							qc.queue_embeds[channel_key] = new_message.id
+							print(f"✅ Moved queue embed to bottom (new ID: {new_message.id})")
 
-					# Register the view
-					dc.add_view(view, message_id=new_message.id)
+							# Register the view
+							dc.add_view(view, message_id=new_message.id)
 
-					# Update the task to track the new message
-					message_id = new_message.id
+							# Update the task to track the new message
+							message_id = new_message.id
 
-					# Also update any global embeds, passing the queue channel ID
-					await update_global_queue_embed(channel, queue_name, channel.id)
-
+							# Also update any global embeds
+							await update_global_queue_embed(channel, queue_name, channel.id)
+						else:
+							print("❌ Task is no longer active, stopping")
+							return
+					else:
+						print("❌ Message no longer exists or is no longer registered, stopping task")
+						return
+				except discord.NotFound:
+					print("❌ Message no longer exists, stopping task")
+					return
 				except Exception as e:
 					print(f"❌ Error moving embed to bottom: {str(e)}")
 					print(f"Type: {type(e)}")
 					import traceback
 					print("Traceback:")
 					print(traceback.format_exc())
+					await asyncio.sleep(30)  # Wait longer on error
+					continue
 
 			# Wait before checking again
 			await asyncio.sleep(15 if is_at_bottom else 5)
