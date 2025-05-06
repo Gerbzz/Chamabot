@@ -421,89 +421,40 @@ async def queue_embed(ctx, queue_name: str):
 	print(f"🏠 Server ID: {ctx.interaction.guild.id}")
 	
 	try:
-		# Find all queue channels in this server
-		server_queue_channels = {
-			channel_id: qc for channel_id, qc in bot.queue_channels.items()
-			if qc.guild_id == ctx.interaction.guild.id
-		}
-		
-		if not server_queue_channels:
-			print("❌ No queue channels found in this server")
-			await ctx.error("No queue channels found in this server")
-			return
-			
-		# Find the queue across all channels in this server
-		q = None
-		source_qc = None
-		source_channel_id = None
-		
-		# First, try to find the queue in any channel
-		for channel_id, qc in server_queue_channels.items():
-			found_q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
-			if found_q:
-				q = found_q
-				source_qc = qc
-				source_channel_id = channel_id
-				print(f"✅ Found queue in channel ID {channel_id}")
-				break
-		
-		# If queue not found, try to find it in the current channel
-		if not q and ctx.channel.id in bot.queue_channels:
-			current_qc = bot.queue_channels[ctx.channel.id]
-			found_q = find(lambda i: i.name.lower() == queue_name.lower(), current_qc.queues)
-			if found_q:
-				q = found_q
-				source_qc = current_qc
-				source_channel_id = ctx.channel.id
-				print(f"✅ Found queue in current channel")
-		
-		if not q:
-			print("❌ Queue not found in this server")
-			await ctx.error(f"Queue {queue_name} not found in this server")
-			return
-			
-		# Get the source channel name
-		source_channel = ctx.interaction.guild.get_channel(source_channel_id)
-		if source_channel:
-			print(f"✅ Found queue in channel {source_channel.name}")
-		else:
-			print(f"✅ Found queue in channel ID {source_channel_id}")
-		
-		# Check if queue is empty
-		if len(q.queue) == 0:
-			print("👥 Queue is empty")
-		
-		# Get or create QueueChannel for current channel
+		# Get the current channel's queue channel
 		current_qc = bot.queue_channels.get(ctx.channel.id)
 		if not current_qc:
-			print(f"📝 Creating new QueueChannel for channel {ctx.channel.id}")
-			current_qc = bot.QueueChannel(ctx.channel)
-			bot.queue_channels[ctx.channel.id] = current_qc
+			print("❌ Current channel is not a queue channel")
+			await ctx.error("This channel is not a queue channel")
+			return
 			
-			# Copy the queue from the source channel
-			print(f"📝 Copying queue data from source channel")
-			current_qc.queues = source_qc.queues
-			current_qc.queue_views = {}
-			current_qc.queue_embeds = {}
-		else:
-			# Update existing QueueChannel with source channel's queues
-			print(f"📝 Updating existing QueueChannel with source channel's queues")
-			current_qc.queues = source_qc.queues
+		# Find the queue in the current channel
+		q = find(lambda i: i.name.lower() == queue_name.lower(), current_qc.queues)
+		if not q:
+			print("❌ Queue not found in this channel")
+			await ctx.error(f"Queue {queue_name} not found in this channel")
+			return
+			
+		# Create the view with join/leave buttons
+		view = View(timeout=None)
 		
-		# Create or get the view
-		if queue_name in current_qc.queue_views:
-			print(f"📝 Using existing view for queue: {queue_name}")
-			view = current_qc.queue_views[queue_name]
-		else:
-			print(f"📝 Creating new view for queue: {queue_name}")
-			view = View(timeout=None)
-			join_button = Button(label="Join", style=ButtonStyle.green, custom_id=f"join_{queue_name}")
-			leave_button = Button(label="Leave", style=ButtonStyle.red, custom_id=f"leave_{queue_name}")
-			join_button.callback = join_callback
-			leave_button.callback = leave_callback
-			view.add_item(join_button)
-			view.add_item(leave_button)
-			current_qc.queue_views[queue_name] = view
+		# Join button
+		join_button = Button(
+			style=ButtonStyle.green,
+			label="Join Queue",
+			custom_id=f"join_{queue_name}"
+		)
+		join_button.callback = lambda i: add(i, queue_name)
+		view.add_item(join_button)
+		
+		# Leave button
+		leave_button = Button(
+			style=ButtonStyle.red,
+			label="Leave Queue",
+			custom_id=f"leave_{queue_name}"
+		)
+		leave_button.callback = lambda i: remove(i, queue_name)
+		view.add_item(leave_button)
 		
 		# Create the embed
 		embed = Embed(
@@ -511,6 +462,7 @@ async def queue_embed(ctx, queue_name: str):
 			description="Current queued players:",
 			color=0x7289DA
 		)
+		
 		if len(q.queue):
 			embed.add_field(
 				name="Players",
@@ -524,24 +476,27 @@ async def queue_embed(ctx, queue_name: str):
 				inline=False
 			)
 		
+		# Create channel-specific key for tracking
+		channel_key = f"{queue_name}_{ctx.channel.id}"
+		
 		# Check if we already have a message for this queue in this channel
-		if queue_name in current_qc.queue_embeds:
+		if channel_key in current_qc.queue_embeds:
 			print(f"📝 Updating existing embed for queue: {queue_name}")
 			try:
 				# Try to update the existing message
-				message = await ctx.channel.fetch_message(current_qc.queue_embeds[queue_name])
+				message = await ctx.channel.fetch_message(current_qc.queue_embeds[channel_key])
 				await message.edit(embed=embed, view=view)
 				print(f"✅ Updated existing embed")
 			except Exception as e:
 				print(f"ℹ️ Could not update existing message, creating new one: {str(e)}")
 				# If we can't update, create a new message
 				message = await ctx.channel.send(embed=embed, view=view)
-				current_qc.queue_embeds[queue_name] = message.id
+				current_qc.queue_embeds[channel_key] = message.id
 				print(f"✅ Created new embed")
 		else:
 			# Send new message if we don't have one
 			message = await ctx.channel.send(embed=embed, view=view)
-			current_qc.queue_embeds[queue_name] = message.id
+			current_qc.queue_embeds[channel_key] = message.id
 			print(f"✅ Created new embed")
 		
 		# Start or update the background task
