@@ -444,7 +444,7 @@ async def queue_embed(ctx, queue_name: str):
 			label="Join Queue",
 			custom_id=f"join_{queue_name}"
 		)
-		join_button.callback = lambda i: add(i, queue_name)
+		join_button.callback = join_callback
 		view.add_item(join_button)
 		
 		# Leave button
@@ -453,7 +453,7 @@ async def queue_embed(ctx, queue_name: str):
 			label="Leave Queue",
 			custom_id=f"leave_{queue_name}"
 		)
-		leave_button.callback = lambda i: remove(i, queue_name)
+		leave_button.callback = leave_callback
 		view.add_item(leave_button)
 		
 		# Create the embed
@@ -640,25 +640,11 @@ async def join_callback(interaction):
 			await interaction.response.send_message("This queue is no longer active.", ephemeral=True)
 			return
 			
-		# Find the queue
-		q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
-		if not q:
-			await interaction.response.send_message(f"Queue {queue_name} not found.", ephemeral=True)
-			return
+		# Create a SlashContext for the interaction
+		ctx = bot.context.slash.context.SlashContext(qc, interaction)
 			
 		# Add the user to the queue
-		resp = await q.add_member(interaction, interaction.user)
-		if resp == bot.Qr.Success:
-			await qc.update_expire(interaction.user)
-			await interaction.response.send_message(f"Added to {queue_name} queue!", ephemeral=True)
-			# Update the embed
-			await update_queue_embed(channel, queue_name)
-		elif resp == bot.Qr.QueueStarted:
-			await interaction.response.send_message("Queue started!", ephemeral=True)
-			# Update the embed
-			await update_queue_embed(channel, queue_name)
-		else:
-			await interaction.response.send_message("Could not join the queue.", ephemeral=True)
+		await add(ctx, queue_name)
 			
 	except Exception as e:
 		print(f"Error in join_callback: {str(e)}")
@@ -677,22 +663,11 @@ async def leave_callback(interaction):
 			await interaction.response.send_message("This queue is no longer active.", ephemeral=True)
 			return
 			
-		# Find the queue
-		q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
-		if not q:
-			await interaction.response.send_message(f"Queue {queue_name} not found.", ephemeral=True)
-			return
+		# Create a SlashContext for the interaction
+		ctx = bot.context.slash.context.SlashContext(qc, interaction)
 			
 		# Remove the user from the queue
-		if q.is_added(interaction.user):
-			q.pop_members(interaction.user)
-			if not any((q.is_added(interaction.user) for q in qc.queues)):
-				bot.expire.cancel(qc, interaction.user)
-			await interaction.response.send_message(f"Removed from {queue_name} queue!", ephemeral=True)
-			# Update the embed
-			await update_queue_embed(channel, queue_name)
-		else:
-			await interaction.response.send_message("You are not in this queue.", ephemeral=True)
+		await remove(ctx, queue_name)
 			
 	except Exception as e:
 		print(f"Error in leave_callback: {str(e)}")
