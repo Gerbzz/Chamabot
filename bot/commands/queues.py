@@ -287,24 +287,20 @@ async def queue_embed(ctx, queue_name: str):
 			inline=False
 		)
 
+	# Create buttons
+	join_button = Button(
+		style=ButtonStyle.green,
+		custom_id=f"join_{queue_name}",
+		emoji="✅"
+	)
+	leave_button = Button(
+		style=ButtonStyle.red,
+		custom_id=f"leave_{queue_name}",
+		emoji="❌"
+	)
+
 	# Create action row
-	action_row = ActionRow(data={
-		"type": 1,
-		"components": [
-			{
-				"type": 2,
-				"style": 1,
-				"custom_id": f"join_{queue_name}",
-				"emoji": {"name": "✅"}
-			},
-			{
-				"type": 2,
-				"style": 1,
-				"custom_id": f"leave_{queue_name}",
-				"emoji": {"name": "❌"}
-			}
-		]
-	})
+	action_row = ActionRow(join_button, leave_button)
 
 	# Check if we already have an embed for this queue
 	if hasattr(ctx.qc, 'queue_embeds') and queue_name in ctx.qc.queue_embeds:
