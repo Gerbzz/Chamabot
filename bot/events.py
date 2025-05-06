@@ -91,41 +91,51 @@ async def on_ready():
 		for key, message_id in bot.commands.queues.global_queue_embeds.items():
 			try:
 				# Get channel and queue info from the key
-				# Format: global_queue-name_channel-id
+				# Format could be either:
+				# - global_queue-name_channel-id (legacy)
+				# - global_queue-name_channel-id_queue-channel-id (new)
 				parts = key.split('_')
-				if len(parts) >= 3:  # Ensure we have enough parts
-					queue_name = parts[1]
-					channel_id = int(parts[2])
+				if len(parts) < 3:
+					log.error(f"Invalid key format: {key}")
+					continue
 					
-					# Get the channel
-					channel = dc.get_channel(channel_id)
-					if channel:
-						# Create the view with join/leave buttons
-						view = View(timeout=None)
-						
-						# Join button
-						join_button = Button(
-							style=ButtonStyle.green.value,
-							label="Join Queue",
-							custom_id=f"global_join_{queue_name}"
-						)
-						join_button.callback = bot.commands.queues.global_join_callback
-						view.add_item(join_button)
-						
-						# Leave button
-						leave_button = Button(
-							style=ButtonStyle.red.value,
-							label="Leave Queue",
-							custom_id=f"global_leave_{queue_name}"
-						)
-						leave_button.callback = bot.commands.queues.global_leave_callback
-						view.add_item(leave_button)
-						
-						# Register the view with the bot
-						dc.add_view(view, message_id=message_id)
-						log.info(f"Registered global view for queue {queue_name} in channel {channel.name}")
-					else:
-						log.error(f"Could not find channel {channel_id} for global queue embed")
+				queue_name = parts[1]
+				channel_id = int(parts[2])
+				
+				# Get the queue channel ID (if available)
+				queue_channel_id = None
+				if len(parts) >= 4:
+					queue_channel_id = int(parts[3])
+				
+				# Get the channel
+				channel = dc.get_channel(channel_id)
+				if channel:
+					# Create the view with join/leave buttons
+					view = View(timeout=None)
+					
+					# Join button
+					join_button = Button(
+						style=ButtonStyle.green.value,
+						label="Join Queue",
+						custom_id=f"global_join_{queue_name}_{queue_channel_id if queue_channel_id else channel_id}"
+					)
+					join_button.callback = bot.commands.queues.global_join_callback
+					view.add_item(join_button)
+					
+					# Leave button
+					leave_button = Button(
+						style=ButtonStyle.red.value,
+						label="Leave Queue",
+						custom_id=f"global_leave_{queue_name}_{queue_channel_id if queue_channel_id else channel_id}"
+					)
+					leave_button.callback = bot.commands.queues.global_leave_callback
+					view.add_item(leave_button)
+					
+					# Register the view with the bot
+					dc.add_view(view, message_id=message_id)
+					log.info(f"Registered global view for queue {queue_name} in channel {channel.name}")
+				else:
+					log.error(f"Could not find channel {channel_id} for global queue embed")
 			except Exception as e:
 				log.error(f"Failed to register global view for key {key}: {str(e)}")
 	except Exception as e:

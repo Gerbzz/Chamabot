@@ -820,8 +820,17 @@ async def _global_queue_embed(
 		name="queue_name",
 		description="Name of the queue to create global embed for",
 		required=True
+	),
+	queue_channel: TextChannel = SlashOption(
+		name="queue_channel",
+		description="Channel where the queue is located (if not the current channel)",
+		required=False
 	)
-): await run_slash(bot.commands.global_queue_embed, interaction=interaction, queue_name=queue_name)
+): 
+	if queue_channel:
+		await run_slash(bot.commands.global_queue_embed, interaction=interaction, queue_name=queue_name, channel_id=queue_channel.id)
+	else:
+		await run_slash(bot.commands.global_queue_embed, interaction=interaction, queue_name=queue_name)
 _global_queue_embed.on_autocomplete("queue_name")(autocomplete.queues)
 
 
@@ -832,7 +841,16 @@ async def _remove_global_queue_embed(
 		name="queue_name",
 		description="Name of the queue to remove global embed for",
 		required=True
+	),
+	queue_channel: TextChannel = SlashOption(
+		name="queue_channel",
+		description="Channel where the queue is located (if not the current channel)",
+		required=False
 	)
-): await run_slash(bot.commands.remove_global_queue_embed, interaction=interaction, queue_name=queue_name)
+): 
+	if queue_channel:
+		await run_slash(bot.commands.remove_global_queue_embed, interaction=interaction, queue_name=queue_name, queue_channel_id=queue_channel.id)
+	else:
+		await run_slash(bot.commands.remove_global_queue_embed, interaction=interaction, queue_name=queue_name)
 _remove_global_queue_embed.on_autocomplete("queue_name")(autocomplete.queues)
 

@@ -875,12 +875,19 @@ async def remove_queue_embed(ctx, queue_name: str):
 async def global_join_callback(interaction):
 	"""Callback for the join button on global queue embeds that doesn't post to chat"""
 	try:
-		# Get the queue name from the button's custom_id
-		queue_name = interaction.data['custom_id'].split('_')[1]
+		# Get the queue name and channel ID from the button's custom_id
+		# Format: global_join_queuename_channelid
+		parts = interaction.data['custom_id'].split('_')
+		if len(parts) >= 4:
+			queue_name = parts[2]
+			queue_channel_id = int(parts[3])
+		else:
+			# Legacy format support
+			queue_name = parts[2]
+			queue_channel_id = interaction.channel.id
 		
-		# Get the queue channel and queue
-		channel = interaction.channel
-		qc = bot.queue_channels.get(channel.id)
+		# Get the queue channel
+		qc = bot.queue_channels.get(queue_channel_id)
 		if not qc:
 			await interaction.response.send_message("This queue is no longer active.", ephemeral=True)
 			return
@@ -903,7 +910,20 @@ async def global_join_callback(interaction):
 		result = await q.add_member(ctx, interaction.user, silent=True)
 		
 		# Only update the embed, don't post to chat
-		await update_global_queue_embed(channel, queue_name)
+		current_channel = interaction.channel
+		
+		# Update all global embeds for this queue on all channels
+		for key, message_id in list(global_queue_embeds.items()):
+			if queue_name in key and str(queue_channel_id) in key:
+				parts = key.split('_')
+				if len(parts) >= 4:
+					embed_channel_id = int(parts[3])
+					try:
+						channel = dc.get_channel(embed_channel_id)
+						if channel:
+							await update_global_queue_embed(channel, queue_name, queue_channel_id)
+					except Exception as e:
+						print(f"Error updating global embed {key}: {str(e)}")
 		
 		# Send an ephemeral response to the user
 		if result == bot.Qr.Success:
@@ -927,12 +947,19 @@ async def global_join_callback(interaction):
 async def global_leave_callback(interaction):
 	"""Callback for the leave button on global queue embeds that doesn't post to chat"""
 	try:
-		# Get the queue name from the button's custom_id
-		queue_name = interaction.data['custom_id'].split('_')[1]
+		# Get the queue name and channel ID from the button's custom_id
+		# Format: global_leave_queuename_channelid
+		parts = interaction.data['custom_id'].split('_')
+		if len(parts) >= 4:
+			queue_name = parts[2]
+			queue_channel_id = int(parts[3])
+		else:
+			# Legacy format support
+			queue_name = parts[2]
+			queue_channel_id = interaction.channel.id
 		
-		# Get the queue channel and queue
-		channel = interaction.channel
-		qc = bot.queue_channels.get(channel.id)
+		# Get the queue channel
+		qc = bot.queue_channels.get(queue_channel_id)
 		if not qc:
 			await interaction.response.send_message("This queue is no longer active.", ephemeral=True)
 			return
@@ -954,8 +981,18 @@ async def global_leave_callback(interaction):
 		# Remove the user from the queue
 		q.pop_members(interaction.user)
 		
-		# Only update the embed, don't post to chat
-		await update_global_queue_embed(channel, queue_name)
+		# Update all global embeds for this queue on all channels
+		for key, message_id in list(global_queue_embeds.items()):
+			if queue_name in key and str(queue_channel_id) in key:
+				parts = key.split('_')
+				if len(parts) >= 4:
+					embed_channel_id = int(parts[3])
+					try:
+						channel = dc.get_channel(embed_channel_id)
+						if channel:
+							await update_global_queue_embed(channel, queue_name, queue_channel_id)
+					except Exception as e:
+						print(f"Error updating global embed {key}: {str(e)}")
 		
 		# Send an ephemeral response to the user
 		await interaction.response.send_message(f"You've been removed from the {queue_name} queue", ephemeral=True)
@@ -967,11 +1004,15 @@ async def global_leave_callback(interaction):
 		except:
 			pass
 
-async def update_global_queue_embed(channel, queue_name):
+async def update_global_queue_embed(channel, queue_name, queue_channel_id=None):
 	"""Update a global queue embed without posting to chat"""
 	try:
+		# If no queue_channel_id is provided, assume it's the same as the channel
+		if queue_channel_id is None:
+			queue_channel_id = channel.id
+		
 		# Get the queue channel
-		qc = bot.queue_channels.get(channel.id)
+		qc = bot.queue_channels.get(queue_channel_id)
 		if not qc:
 			return
 
@@ -981,18 +1022,24 @@ async def update_global_queue_embed(channel, queue_name):
 			return
 
 		# Check if there's a global embed for this queue in this channel
-		channel_key = f"global_{queue_name}_{channel.id}"
-		print(f"🔍 Looking for global embed with key: {channel_key}")
+		channel_key = f"global_{queue_name}_{channel.id}_{queue_channel_id}"
 		
+		# Try with the new format first
 		if channel_key not in global_queue_embeds:
-			# Print all available global embeds keys for debugging
-			print(f"📋 Available global embed keys: {list(global_queue_embeds.keys())}")
-			return
+			# Try legacy format (without queue channel ID)
+			legacy_key = f"global_{queue_name}_{channel.id}"
+			if legacy_key in global_queue_embeds:
+				channel_key = legacy_key
+			else:
+				# Print all available global embeds keys for debugging
+				print(f"🔍 Looking for global embed with key: {channel_key}")
+				print(f"📋 Available global embed keys: {list(global_queue_embeds.keys())}")
+				return
 
 		# Create the embed
 		embed = Embed(
 			title=f"{q.name} Queue",
-			description="Current queued players:",
+			description=f"Queue from channel: <#{queue_channel_id}>",
 			color=0x7289DA
 		)
 		if len(q.queue):
@@ -1034,8 +1081,9 @@ async def update_global_queue_embed(channel, queue_name):
 	except Exception as e:
 		print(f"❌ Error in update_global_queue_embed: {str(e)}")
 
-async def global_queue_embed(ctx, queue_name: str):
-	"""Create a global queue embed with join/leave buttons that doesn't post updates to chat"""
+async def global_queue_embed(ctx, queue_name: str, channel_id: int = None):
+	"""Create a global queue embed with join/leave buttons that doesn't post updates to chat
+	Can be posted in any channel, not just the queue channel"""
 	print("\n==================================================")
 	print("🎮 GLOBAL QUEUE EMBED")
 	print("==================================================")
@@ -1043,20 +1091,37 @@ async def global_queue_embed(ctx, queue_name: str):
 	print(f"👤 Context type: {type(ctx)}")
 	
 	try:
-		# Get the current channel's queue channel
-		current_qc = bot.queue_channels.get(ctx.channel.id)
-		if not current_qc:
-			print("❌ Current channel is not a queue channel")
-			await ctx.error("This channel is not a queue channel")
+		# Determine the channel to post in (current channel by default)
+		target_channel = ctx.channel
+		
+		# Find the queue channel that contains the requested queue
+		queue_channel = None
+		queue_obj = None
+		
+		# First check if the current channel is a queue channel
+		if ctx.channel.id in bot.queue_channels:
+			current_qc = bot.queue_channels[ctx.channel.id]
+			# Check if the requested queue exists in this channel
+			if (q := find(lambda i: i.name.lower() == queue_name.lower(), current_qc.queues)):
+				queue_channel = current_qc
+				queue_obj = q
+		
+		# If we didn't find the queue in the current channel, search all queue channels
+		if not queue_obj:
+			for qc_id, qc in bot.queue_channels.items():
+				if (q := find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)):
+					queue_channel = qc
+					queue_obj = q
+					break
+		
+		# If we still couldn't find the queue, error out
+		if not queue_obj:
+			print("❌ Queue not found in any channel")
+			await ctx.error(f"Queue {queue_name} not found in any channel")
 			return
 			
-		# Find the queue in the current channel
-		q = find(lambda i: i.name.lower() == queue_name.lower(), current_qc.queues)
-		if not q:
-			print("❌ Queue not found in this channel")
-			await ctx.error(f"Queue {queue_name} not found in this channel")
-			return
-			
+		print(f"✅ Found queue {queue_name} in channel {queue_channel.channel.name}")
+		
 		# Create the view with join/leave buttons
 		view = View(timeout=None)
 		
@@ -1064,7 +1129,7 @@ async def global_queue_embed(ctx, queue_name: str):
 		join_button = Button(
 			style=ButtonStyle.green.value,
 			label="Join Queue",
-			custom_id=f"global_join_{queue_name}"
+			custom_id=f"global_join_{queue_name}_{queue_channel.id}"
 		)
 		join_button.callback = global_join_callback
 		view.add_item(join_button)
@@ -1073,22 +1138,22 @@ async def global_queue_embed(ctx, queue_name: str):
 		leave_button = Button(
 			style=ButtonStyle.red.value,
 			label="Leave Queue",
-			custom_id=f"global_leave_{queue_name}"
+			custom_id=f"global_leave_{queue_name}_{queue_channel.id}"
 		)
 		leave_button.callback = global_leave_callback
 		view.add_item(leave_button)
 		
 		# Create the embed
 		embed = Embed(
-			title=f"{q.name} Queue",
-			description="Current queued players:",
+			title=f"{queue_obj.name} Queue",
+			description=f"Queue from channel: <#{queue_channel.id}>",
 			color=0x7289DA
 		)
 		
-		if len(q.queue):
+		if len(queue_obj.queue):
 			embed.add_field(
 				name="Players",
-				value="\n".join([f"• {player.display_name}" for player in q.queue]),
+				value="\n".join([f"• {player.display_name}" for player in queue_obj.queue]),
 				inline=False
 			)
 		else:
@@ -1101,7 +1166,7 @@ async def global_queue_embed(ctx, queue_name: str):
 		# Add queue info
 		embed.add_field(
 			name="Status",
-			value=f"{len(q.queue)}/{q.cfg.size} players",
+			value=f"{len(queue_obj.queue)}/{queue_obj.cfg.size} players",
 			inline=True
 		)
 		
@@ -1109,7 +1174,8 @@ async def global_queue_embed(ctx, queue_name: str):
 		embed.set_footer(text=f"Last updated: {time.strftime('%H:%M:%S')} • Silent Mode")
 		
 		# Create channel-specific key for tracking
-		channel_key = f"global_{queue_name}_{ctx.channel.id}"
+		# This includes both the target channel ID and the queue channel ID
+		channel_key = f"global_{queue_name}_{ctx.channel.id}_{queue_channel.id}"
 		
 		# Check if we already have a message for this queue in this channel
 		if channel_key in global_queue_embeds:
@@ -1157,7 +1223,7 @@ async def global_queue_embed(ctx, queue_name: str):
 		print(traceback.format_exc())
 		await ctx.error(f"An error occurred while creating the global queue embed: {str(e)}")
 
-async def remove_global_queue_embed(ctx, queue_name: str):
+async def remove_global_queue_embed(ctx, queue_name: str, queue_channel_id: int = None):
 	"""Remove a global queue embed from the channel"""
 	print("\n==================================================")
 	print("🎮 REMOVE GLOBAL QUEUE EMBED")
@@ -1166,45 +1232,91 @@ async def remove_global_queue_embed(ctx, queue_name: str):
 	print(f"👤 Context type: {type(ctx)}")
 	
 	try:
-		# Get the current channel's queue channel
-		current_qc = bot.queue_channels.get(ctx.channel.id)
-		if not current_qc:
-			print("❌ Current channel is not a queue channel")
-			await ctx.error("This channel is not a queue channel")
-			return
+		# If no queue_channel_id is provided, we need to find embeds in this channel for the specified queue
+		if queue_channel_id is None:
+			# Look for any global embed for this queue in this channel
+			keys_to_remove = []
+			for key in global_queue_embeds.keys():
+				parts = key.split('_')
+				if len(parts) >= 3 and parts[0] == "global" and parts[1] == queue_name and str(ctx.channel.id) == parts[2]:
+					keys_to_remove.append(key)
 			
-		# Find the queue in the current channel
-		q = find(lambda i: i.name.lower() == queue_name.lower(), current_qc.queues)
-		if not q:
-			print("❌ Queue not found in this channel")
-			await ctx.error(f"Queue {queue_name} not found in this channel")
-			return
-		
-		# Create channel-specific key for tracking
-		channel_key = f"global_{queue_name}_{ctx.channel.id}"
-		
-		# Check if we have a message for this queue in this channel
-		if channel_key in global_queue_embeds:
-			try:
-				# Try to delete the existing message
-				message_id = global_queue_embeds[channel_key]
-				message = await ctx.channel.fetch_message(message_id)
-				await message.delete()
-				print(f"✅ Deleted global queue embed for {queue_name}")
-				
-				# Remove the message ID from tracking
-				del global_queue_embeds[channel_key]
-				
-				# Save queue data
-				save_global_queue_data()
-				
-				await ctx.success(f"Global queue embed for **{queue_name}** has been removed.")
-			except Exception as e:
-				print(f"❌ Error deleting message: {str(e)}")
-				await ctx.error(f"Failed to delete global queue embed: {str(e)}")
+			if not keys_to_remove:
+				print("❌ No global queue embed found for this queue")
+				await ctx.error(f"No global queue embed found for {queue_name}")
+				return
+			
+			# Remove all matching embeds
+			for key in keys_to_remove:
+				try:
+					message_id = global_queue_embeds[key]
+					message = await ctx.channel.fetch_message(message_id)
+					await message.delete()
+					print(f"✅ Deleted global queue embed for {queue_name}")
+					
+					# Remove the message ID from tracking
+					del global_queue_embeds[key]
+				except Exception as e:
+					print(f"❌ Error deleting message for key {key}: {str(e)}")
+					# If we can't find the message, still remove the key
+					if key in global_queue_embeds:
+						del global_queue_embeds[key]
+			
+			# Save queue data
+			save_global_queue_data()
+			
+			await ctx.success(f"Global queue embed for **{queue_name}** has been removed.")
 		else:
-			print("❌ No global queue embed found for this queue")
-			await ctx.error(f"No global queue embed found for {queue_name}")
+			# If queue_channel_id is provided, look for the specific embed
+			channel_key = f"global_{queue_name}_{ctx.channel.id}_{queue_channel_id}"
+			
+			# Check if we have a message for this queue in this channel
+			if channel_key in global_queue_embeds:
+				try:
+					# Try to delete the existing message
+					message_id = global_queue_embeds[channel_key]
+					message = await ctx.channel.fetch_message(message_id)
+					await message.delete()
+					print(f"✅ Deleted global queue embed for {queue_name}")
+					
+					# Remove the message ID from tracking
+					del global_queue_embeds[channel_key]
+					
+					# Save queue data
+					save_global_queue_data()
+					
+					await ctx.success(f"Global queue embed for **{queue_name}** has been removed.")
+				except Exception as e:
+					print(f"❌ Error deleting message: {str(e)}")
+					# If we can't find the message, still remove the key
+					if channel_key in global_queue_embeds:
+						del global_queue_embeds[channel_key]
+					await ctx.error(f"Failed to delete global queue embed: {str(e)}")
+			else:
+				# Try with legacy format
+				legacy_key = f"global_{queue_name}_{ctx.channel.id}"
+				if legacy_key in global_queue_embeds:
+					try:
+						message_id = global_queue_embeds[legacy_key]
+						message = await ctx.channel.fetch_message(message_id)
+						await message.delete()
+						print(f"✅ Deleted global queue embed for {queue_name}")
+						
+						# Remove the message ID from tracking
+						del global_queue_embeds[legacy_key]
+						
+						# Save queue data
+						save_global_queue_data()
+						
+						await ctx.success(f"Global queue embed for **{queue_name}** has been removed.")
+					except Exception as e:
+						print(f"❌ Error deleting message: {str(e)}")
+						if legacy_key in global_queue_embeds:
+							del global_queue_embeds[legacy_key]
+						await ctx.error(f"Failed to delete global queue embed: {str(e)}")
+				else:
+					print("❌ No global queue embed found for this queue")
+					await ctx.error(f"No global queue embed found for {queue_name}")
 	
 	except Exception as e:
 		print(f"❌ Error in remove_global_queue_embed: {str(e)}")
@@ -1244,6 +1356,16 @@ def load_global_queue_data():
 	except Exception as e:
 		print(f"❌ Error loading global queue data: {str(e)}")
 
+# Load global queue embeds from saved state on bot restart
+def load_global_queue_data_from_state(data):
+	if 'global_queue_embeds' in data:
+		try:
+			for key, message_id in data['global_queue_embeds'].items():
+				global_queue_embeds[key] = message_id
+			print("✅ Loaded global queue embeds from saved state")
+		except Exception as e:
+			print(f"❌ Error loading global queue embeds: {str(e)}")
+
 # Modify save_state to also save global queue embeds
 def save_state():
 	log.info("Saving state...")
@@ -1280,13 +1402,3 @@ def save_state():
 		log.info("State saved successfully")
 	except Exception as e:
 		log.error(f"Failed to save state: {str(e)}")
-
-# Load global queue embeds from saved state on bot restart
-def load_global_queue_data_from_state(data):
-	if 'global_queue_embeds' in data:
-		try:
-			for key, message_id in data['global_queue_embeds'].items():
-				global_queue_embeds[key] = message_id
-			print("✅ Loaded global queue embeds from saved state")
-		except Exception as e:
-			print(f"❌ Error loading global queue embeds: {str(e)}")
