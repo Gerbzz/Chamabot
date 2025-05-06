@@ -60,49 +60,62 @@ async def on_reaction_remove(reaction, user):  # FIXME: this event does not get 
 
 @dc.event
 async def on_ready():
-	await dc.change_presence(activity=Activity(type=ActivityType.watching, name=cfg.STATUS))
-	if not bot.bot_was_ready:  # Connected for the first time, load everything
-		log.info(f"Logged in discord as '{dc.user.name}#{dc.user.discriminator}'.")
-		log.info("Loading queue channels...")
-		for channel_id in await bot.QueueChannel.cfg_factory.p_keys():
-			channel = dc.get_channel(channel_id)
-			if channel:
-				bot.queue_channels[channel_id] = await bot.QueueChannel.create(channel)
-				await bot.queue_channels[channel_id].update_info(channel)
-				log.info(f"\tInit channel {channel.guild.name}>#{channel.name} successful.")
-			else:
-				log.info(f"\tCould not reach a text channel with id {channel_id}.")
+	global bot_was_ready, bot_ready
+	if not bot_was_ready:
+		log.info("Connecting to discord...")
+		bot_was_ready = True
+	else:
+		log.info("Reconnecting to discord...")
 
-		await bot.load_state()
-		bot.bot_was_ready = True
-		bot.bot_ready = True
-		log.info("Done.")
-		
-		# Register existing views for all queue embeds
+	log.info(f"Logged in discord as '{dc.user}'.")
+	log.info("Loading queue channels...")
+	for qc in bot.queue_channels.values():
+		if (channel := dc.get_channel(qc.id)) is not None:
+			log.info(f"    Init channel {channel.guild.name}>#{channel.name} successful.")
+			await qc.update_info(channel)
+		else:
+			log.error(f"    Init channel {qc.cfg.cfg_info.get('guild_name')}>#{qc.cfg.cfg_info.get('channel_name')} failed.")
+
+	log.info("Loading state...")
+	await bot.load_state()
+	log.info("Done.")
+
+	if not bot_ready:
+		bot_ready = True
 		log.info("Registering existing queue embed views...")
 		for qc in bot.queue_channels.values():
-			for queue in qc.queues:
-				channel_key = f"{queue.name}_{qc.channel.id}"
-				if channel_key in qc.queue_embeds:
-					try:
-						# Create the view
-						view = View(timeout=None)
-						join_button = Button(label="Join", style=ButtonStyle.green, custom_id=f"join_{queue.name}")
-						leave_button = Button(label="Leave", style=ButtonStyle.red, custom_id=f"leave_{queue.name}")
-						join_button.callback = join_callback
-						leave_button.callback = leave_callback
-						view.add_item(join_button)
-						view.add_item(leave_button)
-						
-						# Register the view with the bot
-						dc.add_view(view, message_id=qc.queue_embeds[channel_key])
-						log.info(f"\tRegistered view for queue {queue.name} in {qc.channel.name}")
-					except Exception as e:
-						log.error(f"\tFailed to register view for queue {queue.name}: {str(e)}")
+			if (channel := dc.get_channel(qc.id)) is not None:
+				for queue in qc.queues:
+					channel_key = f"{queue.name}_{channel.id}"
+					if channel_key in qc.queue_embeds:
+						try:
+							# Create buttons for the queue
+							join_button = Button(
+								style=ButtonStyle.green,
+								label="Join",
+								custom_id=f"join_{queue.name}"
+							)
+							leave_button = Button(
+								style=ButtonStyle.red,
+								label="Leave",
+								custom_id=f"leave_{queue.name}"
+							)
+
+							# Add callbacks to the buttons
+							join_button.callback = lambda i: join_queue_callback(i, queue)
+							leave_button.callback = lambda i: leave_queue_callback(i, queue)
+
+							# Create the view
+							view = View(timeout=None)
+							view.add_item(join_button)
+							view.add_item(leave_button)
+
+							# Register the view with the bot
+							dc.add_view(view, message_id=qc.queue_embeds[channel_key])
+							log.info(f"Registered view for queue {queue.name} in channel {channel.name}")
+						except Exception as e:
+							log.error(f"Failed to register view for queue {queue.name} in channel {channel.name}: {str(e)}")
 		log.info("Queue embed view registration complete.")
-	else:  # Reconnected, fetch new channel objects
-		bot.bot_ready = True
-		log.info("Reconnected to discord.")
 
 
 @dc.event
