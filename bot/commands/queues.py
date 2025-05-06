@@ -450,7 +450,7 @@ async def queue_embed(ctx, queue_name: str):
 			return
 			
 		# Get the source channel name
-		source_channel = ctx.guild.get_channel(source_channel_id)
+		source_channel = ctx.interaction.guild.get_channel(source_channel_id)
 		if source_channel:
 			print(f"✅ Found queue in channel {source_channel.name}")
 		else:
