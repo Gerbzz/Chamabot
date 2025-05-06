@@ -148,12 +148,25 @@ async def move_embed_to_bottom(channel, queue_name: str, message_id: int):
 		
 		# Send new embed at bottom
 		new_message = await channel.send(embed=embed, view=view)
-		# Update the stored message ID
-		qc.queue_embeds[queue_name] = new_message.id
+		
+		# Update the stored message ID with channel-specific key
+		channel_key = f"{queue_name}_{channel.id}"
+		qc.queue_embeds[channel_key] = new_message.id
 		print(f"✅ Moved queue embed to bottom (new ID: {new_message.id})")
+		
+		# Start or update the background task
+		task_key = f"{channel.id}_{queue_name}"
+		if task_key in queue_tasks:
+			queue_tasks[task_key].cancel()
+		queue_tasks[task_key] = asyncio.create_task(keep_embed_at_bottom(channel, queue_name, new_message.id))
+		
 		return new_message.id
 	except Exception as e:
 		print(f"❌ Error moving embed to bottom: {str(e)}")
+		print(f"Type: {type(e)}")
+		import traceback
+		print("Traceback:")
+		print(traceback.format_exc())
 		return None
 
 async def keep_embed_at_bottom(channel, queue_name: str, message_id: int):
