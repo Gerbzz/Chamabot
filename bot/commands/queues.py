@@ -273,12 +273,20 @@ async def queue_embed(ctx, queue_name: str):
 		if not q:
 			raise bot.Exc.SyntaxError(f"Queue '{queue_name}' not found on the channel.")
 
+		print(f"Found queue: {q}")
+		print(f"Queue type: {type(q)}")
+		print(f"Queue attributes: {dir(q)}")
+		print(f"Queue config: {q.cfg}")
+		print(f"Queue config type: {type(q.cfg)}")
+		print(f"Queue config attributes: {dir(q.cfg)}")
+
 		embed = Embed(
 			title=f"{queue_name} Queue",
 			description="Current queued players:",
 			color=0x7289DA
 		)
 
+		print(f"Queue length: {len(q.queue)}")
 		if len(q.queue):
 			embed.add_field(
 				name="Players",
@@ -324,5 +332,7 @@ async def queue_embed(ctx, queue_name: str):
 
 		ctx.qc.button_callbacks[queue_name] = lambda i: _handle_queue_button(i, queue_name, ctx)
 	except Exception as e:
-		print(f"Error in queue_embed: {str(e)}")  # Add more detailed error logging
+		print(f"Error in queue_embed: {str(e)}")
+		print(f"Error type: {type(e)}")
+		print(f"Error traceback: {e.__traceback__}")
 		await ctx.error(f"An error occurred while creating the queue embed: {str(e)}")
