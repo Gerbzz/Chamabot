@@ -1,12 +1,13 @@
 import traceback
 from nextcord import ChannelType, Activity, ActivityType, Button, ButtonStyle
 from nextcord.ui import View
+import asyncio
 
 from core.client import dc
 from core.console import log
 from core.config import cfg
 import bot
-from bot.commands.queues import join_callback, leave_callback
+from bot.commands.queues import join_callback, leave_callback, keep_embed_at_bottom
 
 
 @dc.event
@@ -111,6 +112,13 @@ async def on_ready():
 							# Register the view with the bot
 							dc.add_view(view, message_id=qc.queue_embeds[channel_key])
 							log.info(f"Registered view for queue {queue.name} in channel {channel.name}")
+							
+							# Start background task to keep embed at bottom
+							task_key = f"{channel.id}_{queue.name}"
+							if task_key in bot.queue_tasks:
+								bot.queue_tasks[task_key].cancel()
+							bot.queue_tasks[task_key] = asyncio.create_task(keep_embed_at_bottom(channel, queue.name, qc.queue_embeds[channel_key]))
+							log.info(f"Started background task for queue {queue.name} in channel {channel.name}")
 						except Exception as e:
 							log.error(f"Failed to register view for queue {queue.name} in channel {channel.name}: {str(e)}")
 		log.info("Queue embed view registration complete.")
