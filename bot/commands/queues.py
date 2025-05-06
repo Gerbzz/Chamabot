@@ -301,7 +301,7 @@ async def add(ctx, queues: str = None):
 			# Update the queue embed
 			await update_queue_embed(ctx, q.name)
 			# Also update global embeds if they exist
-			await update_global_queue_embed(ctx.channel, q.name)
+			await update_global_queue_embed(ctx.channel, q.name, ctx.qc.id)
 			return
 
 	if len(not_allowed := [q for q in qr.keys() if qr[q] == bot.Qr.NotAllowed]):
@@ -318,7 +318,7 @@ async def add(ctx, queues: str = None):
 		for q in t_queues:
 			await update_queue_embed(ctx, q.name)
 			# Also update global embeds if they exist
-			await update_global_queue_embed(ctx.channel, q.name)
+			await update_global_queue_embed(ctx.channel, q.name, ctx.qc.id)
 	else:  # have to give some response for slash commands
 		await ctx.ignore(content=ctx.qc.topic, embed=error_embed(ctx.qc.gt("Action had no effect."), title=None))
 
@@ -342,7 +342,7 @@ async def remove(ctx, queues: str = None):
 			# Update the queue embed after removing player
 			await update_queue_embed(ctx, q.name)
 			# Also update global embeds if they exist
-			await update_global_queue_embed(ctx.channel, q.name)
+			await update_global_queue_embed(ctx.channel, q.name, ctx.qc.id)
 
 		if not any((q.is_added(ctx.author) for q in ctx.qc.queues)):
 			bot.expire.cancel(ctx.qc, ctx.author)
@@ -1028,63 +1028,59 @@ async def update_global_queue_embed(channel, queue_name, queue_channel_id=None):
 		if not q:
 			return
 
-		# Check if there's a global embed for this queue in this channel
-		channel_key = f"global_{queue_name}_{channel.id}_{queue_channel_id}"
-		
-		# Try with the new format first
-		if channel_key not in global_queue_embeds:
-			# Try legacy format (without queue channel ID)
-			legacy_key = f"global_{queue_name}_{channel.id}"
-			if legacy_key in global_queue_embeds:
-				channel_key = legacy_key
-			else:
-				# Print all available global embeds keys for debugging
-				print(f"🔍 Looking for global embed with key: {channel_key}")
-				print(f"📋 Available global embed keys: {list(global_queue_embeds.keys())}")
-				return
+		# Update all global embeds for this queue
+		for key, message_id in list(global_queue_embeds.items()):
+			parts = key.split('_')
+			if len(parts) >= 4 and parts[0] == "global" and parts[1] == queue_name:
+				try:
+					embed_channel_id = int(parts[2])
+					embed_channel = dc.get_channel(embed_channel_id)
+					if not embed_channel:
+						continue
 
-		# Create the embed
-		embed = Embed(
-			title=f"{q.name} Queue",
-			description=f"Queue from channel: <#{queue_channel_id}>",
-			color=0x7289DA
-		)
-		if len(q.queue):
-			embed.add_field(
-				name="Players",
-				value="\n".join([f"• {player.display_name}" for player in q.queue]),
-				inline=False
-			)
-		else:
-			embed.add_field(
-				name="Players",
-				value="No players in queue",
-				inline=False
-			)
-		
-		# Add queue info
-		embed.add_field(
-			name="Status",
-			value=f"{len(q.queue)}/{q.cfg.size} players",
-			inline=True
-		)
-		
-		# Add footer with timestamp
-		embed.set_footer(text=f"Last updated: {time.strftime('%H:%M:%S')} • Silent Mode")
-		
-		# Update existing message
-		try:
-			message_id = global_queue_embeds[channel_key]
-			print(f"✅ Found message ID {message_id} for key {channel_key}")
-			message = await channel.fetch_message(message_id)
-			await message.edit(embed=embed)
-			print(f"✅ Updated global queue embed for {queue_name}")
-			return
-		except Exception as e:
-			print(f"❌ Error updating global queue embed: {str(e)}")
-			# Remove the key if the message doesn't exist anymore
-			del global_queue_embeds[channel_key]
-			save_global_queue_data()
+					# Create the embed
+					embed = Embed(
+						title=f"{q.name} Queue",
+						description=f"Queue from channel: <#{queue_channel_id}>",
+						color=0x7289DA
+					)
+					if len(q.queue):
+						embed.add_field(
+							name="Players",
+							value="\n".join([f"• {player.display_name}" for player in q.queue]),
+							inline=False
+						)
+					else:
+						embed.add_field(
+							name="Players",
+							value="No players in queue",
+							inline=False
+						)
+					
+					# Add queue info
+					embed.add_field(
+						name="Status",
+						value=f"{len(q.queue)}/{q.cfg.size} players",
+						inline=True
+					)
+					
+					# Add footer with timestamp
+					embed.set_footer(text=f"Last updated: {time.strftime('%H:%M:%S')} • Silent Mode")
+					
+					# Update the message
+					try:
+						message = await embed_channel.fetch_message(message_id)
+						await message.edit(embed=embed)
+						print(f"✅ Updated global queue embed in channel {embed_channel.name} for {queue_name}")
+					except Exception as e:
+						print(f"❌ Error updating message {message_id} in channel {embed_channel.name}: {str(e)}")
+						# Remove the key if the message doesn't exist anymore
+						del global_queue_embeds[key]
+						save_global_queue_data()
+				except Exception as e:
+					print(f"❌ Error processing global embed {key}: {str(e)}")
+					continue
+
 	except Exception as e:
 		print(f"❌ Error in update_global_queue_embed: {str(e)}")
 

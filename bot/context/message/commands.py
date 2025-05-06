@@ -72,16 +72,16 @@ async def on_message(message):
 						# Create a context object for the queue embed functions
 						queue_ctx = MessageContext(qc, message)
 						await update_queue_embed(queue_ctx, q.name)
-						# Also update any global queue embeds (only needs channel)
-						await update_global_queue_embed(message.channel, q.name)
+						# Also update any global queue embeds with the queue channel ID
+						await update_global_queue_embed(message.channel, q.name, qc.id)
 				# For --, update all queues the user was in
 				else:
 					for q in [q for q in qc.queues if q.is_added(message.author)]:
 						# Create a context object for the queue embed functions
 						queue_ctx = MessageContext(qc, message)
 						await update_queue_embed(queue_ctx, q.name)
-						# Also update any global queue embeds (only needs channel)
-						await update_global_queue_embed(message.channel, q.name)
+						# Also update any global queue embeds with the queue channel ID
+						await update_global_queue_embed(message.channel, q.name, qc.id)
 						
 		except bot.Exc.PubobotException as e:
 			await ctx.error(str(e), title=e.__class__.__name__)
