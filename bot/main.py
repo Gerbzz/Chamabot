@@ -98,6 +98,7 @@ def save_state():
 
 
 async def load_state():
+	# First try to load the state file
 	try:
 		with open("saved_state.json", "r") as f:
 			data = json.loads(f.read())
@@ -107,63 +108,124 @@ async def load_state():
 	except json.JSONDecodeError as e:
 		log.error(f"Failed to parse saved state: {str(e)}")
 		return
+	except Exception as e:
+		log.error(f"Unexpected error loading state file: {str(e)}")
+		return
 
 	log.info("Loading state...")
 
-	bot.allow_offline = list(data.get('allow_offline', []))
+	try:
+		bot.allow_offline = list(data.get('allow_offline', []))
 
-	# First, recreate all queue channels
-	if 'queue_embeds' in data:
-		for channel_id, queues in data['queue_embeds'].items():
-			channel_id = int(channel_id)
-			channel = dc.get_channel(channel_id)
-			if channel and channel_id not in bot.queue_channels:
+		# First, recreate all queue channels
+		if 'queue_embeds' in data:
+			for channel_id, queues in data['queue_embeds'].items():
+				channel_id = int(channel_id)
+				channel = dc.get_channel(channel_id)
+				if channel and channel_id not in bot.queue_channels:
+					try:
+						bot.queue_channels[channel_id] = await bot.QueueChannel.create(channel)
+						log.info(f"Recreated queue channel for {channel.guild.name}>#{channel.name}")
+					except Exception as e:
+						log.error(f"Failed to recreate queue channel {channel_id}: {str(e)}")
+
+		# Then load queue states
+		for qd in data.get('queues', []):
+			if qd.get('queue_type') in ['PickupQueue', None]:
 				try:
-					bot.queue_channels[channel_id] = await bot.QueueChannel.create(channel)
-					log.info(f"Recreated queue channel for {channel.guild.name}>#{channel.name}")
-				except Exception as e:
-					log.error(f"Failed to recreate queue channel {channel_id}: {str(e)}")
+					await bot.PickupQueue.from_json(qd)
+				except bot.Exc.ValueError as e:
+					log.error(f"Failed to load queue state ({qd.get('queue_id')}): {str(e)}")
+			else:
+				log.error(f"Got unknown queue type '{qd.get('queue_type')}'.")
 
-	# Then load queue states
-	for qd in data.get('queues', []):
-		if qd.get('queue_type') in ['PickupQueue', None]:
+		for md in data.get('matches', []):
 			try:
-				await bot.PickupQueue.from_json(qd)
+				await bot.Match.from_json(md)
 			except bot.Exc.ValueError as e:
-				log.error(f"Failed to load queue state ({qd.get('queue_id')}): {str(e)}")
-		else:
-			log.error(f"Got unknown queue type '{qd.get('queue_type')}'.")
+				log.error(f"Failed to load match {md['match_id']}: {str(e)}")
 
-	for md in data.get('matches', []):
-		try:
-			await bot.Match.from_json(md)
-		except bot.Exc.ValueError as e:
-			log.error(f"Failed to load match {md['match_id']}: {str(e)}")
+		if 'expire' in data:
+			await bot.expire.load_json(data['expire'])
 
-	if 'expire' in data:
-		await bot.expire.load_json(data['expire'])
+		# Store and recreate queue embeds
+		if 'queue_embeds' in data:
+			for channel_id, queues in data['queue_embeds'].items():
+				channel_id = int(channel_id)
+				if channel_id in bot.queue_channels:
+					qc = bot.queue_channels[channel_id]
+					channel = dc.get_channel(channel_id)
+					if channel:
+						for queue_name, message_id in queues.items():
+							try:
+								# Store the message ID
+								channel_key = f"{queue_name}_{channel_id}"
+								qc.queue_embeds[channel_key] = message_id
+								
+								# Get the queue
+								q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
+								if not q:
+									continue
+									
+								# Create the view
+								view = View(timeout=None)
+								join_button = Button(label="Join", style=ButtonStyle.green.value, custom_id=f"join_{queue_name}")
+								leave_button = Button(label="Leave", style=ButtonStyle.red.value, custom_id=f"leave_{queue_name}")
+								join_button.callback = bot.commands.queues.join_callback
+								leave_button.callback = bot.commands.queues.leave_callback
+								view.add_item(join_button)
+								view.add_item(leave_button)
+								qc.queue_views[queue_name] = view
+								
+								# Create the embed
+								embed = Embed(
+									title=f"{q.name} Queue",
+									description="Current queued players:",
+									color=0x7289DA
+								)
+								if len(q.queue):
+									embed.add_field(
+										name="Players",
+										value="\n".join([f"• {player.display_name}" for player in q.queue]),
+										inline=False
+									)
+								else:
+									embed.add_field(
+										name="Players",
+										value="No players in queue",
+										inline=False
+									)
+								
+								# Send new embed
+								new_message = await channel.send(embed=embed, view=view)
+								qc.queue_embeds[channel_key] = new_message.id
+								
+								# Register the view with the bot
+								dc.add_view(view, message_id=new_message.id)
+								
+								# Start background task
+								task_key = f"{channel_id}_{queue_name}"
+								if task_key in bot.queue_tasks:
+									bot.queue_tasks[task_key].cancel()
+								bot.queue_tasks[task_key] = asyncio.create_task(
+									bot.commands.queues.keep_embed_at_bottom(channel, queue_name, new_message.id)
+								)
+								log.info(f"Recreated queue embed for {queue_name} in {channel.name}")
+							except Exception as e:
+								log.error(f"Failed to recreate queue embed for {queue_name}: {str(e)}")
+		
+		# Load global queue embeds data
+		if 'global_queue_embeds' in data:
+			try:
+				bot.commands.queues.load_global_queue_data_from_state(data)
+				log.info("Loaded global queue embeds data")
+			except Exception as e:
+				log.error(f"Failed to load global queue embeds data: {str(e)}")
 
-	# Store queue embed data without recreating embeds
-	if 'queue_embeds' in data:
-		for channel_id, queues in data['queue_embeds'].items():
-			channel_id = int(channel_id)
-			if channel_id in bot.queue_channels:
-				qc = bot.queue_channels[channel_id]
-				for queue_name, message_id in queues.items():
-					channel_key = f"{queue_name}_{channel_id}"
-					qc.queue_embeds[channel_key] = message_id
-					# Do not automatically start background tasks or recreate embeds
-					# They will be recreated when the queue_embed command is used
-	
-	# Load global queue embeds data
-	if 'global_queue_embeds' in data:
-		try:
-			bot.commands.queues.load_global_queue_data_from_state(data)
-			log.info("Loaded global queue embeds data")
-		except Exception as e:
-			log.error(f"Failed to load global queue embeds data: {str(e)}")
-
-	log.info("State loaded successfully")
+		log.info("State loaded successfully")
+	except Exception as e:
+		log.error(f"Failed to load state: {str(e)}")
+		return
 
 
 async def remove_players(*users, reason=None):
