@@ -61,17 +61,31 @@ def update_rating_system(qc_cfg):
 def save_state():
 	log.info("Saving state...")
 	queues = []
+	queue_embeds_data = {}
+	
 	for qc in bot.queue_channels.values():
 		for q in qc.queues:
 			if q.length > 0:
 				queues.append(q.serialize())
+			# Save queue embed data
+			channel_key = f"{q.name}_{qc.id}"
+			if channel_key in qc.queue_embeds:
+				if qc.id not in queue_embeds_data:
+					queue_embeds_data[qc.id] = {}
+				queue_embeds_data[qc.id][q.name] = qc.queue_embeds[channel_key]
 
 	matches = []
 	for match in bot.active_matches:
 		matches.append(match.serialize())
 
 	f = open("saved_state.json", 'w')
-	f.write(json.dumps(dict(queues=queues, matches=matches, allow_offline=bot.allow_offline, expire=bot.expire.serialize())))
+	f.write(json.dumps(dict(
+		queues=queues,
+		matches=matches,
+		allow_offline=bot.allow_offline,
+		expire=bot.expire.serialize(),
+		queue_embeds=queue_embeds_data
+	)))
 	f.close()
 
 
@@ -103,6 +117,16 @@ async def load_state():
 
 	if 'expire' in data.keys():
 		await bot.expire.load_json(data['expire'])
+
+	# Load queue embed data
+	if 'queue_embeds' in data:
+		for channel_id, queues in data['queue_embeds'].items():
+			channel_id = int(channel_id)
+			if channel_id in bot.queue_channels:
+				qc = bot.queue_channels[channel_id]
+				for queue_name, message_id in queues.items():
+					channel_key = f"{queue_name}_{channel_id}"
+					qc.queue_embeds[channel_key] = message_id
 
 
 async def remove_players(*users, reason=None):

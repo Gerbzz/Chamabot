@@ -6,6 +6,7 @@ from core.client import dc
 from core.console import log
 from core.config import cfg
 import bot
+from bot.commands.queues import join_callback, leave_callback
 
 
 @dc.event
@@ -100,12 +101,10 @@ async def on_ready():
 								custom_id=f"leave_{queue.name}"
 							)
 
-							# Add callbacks to the buttons
-							join_button.callback = lambda i, q=queue: join_callback(i)
-							leave_button.callback = lambda i, q=queue: leave_callback(i)
-
-							# Create the view
+							# Create the view and add buttons
 							view = View(timeout=None)
+							join_button.callback = join_callback
+							leave_button.callback = leave_callback
 							view.add_item(join_button)
 							view.add_item(leave_button)
 
