@@ -10,6 +10,7 @@ from core.console import log
 from core.database import db
 from core.config import cfg
 from core.utils import error_embed, ok_embed, get
+from core.client import dc
 
 import bot
 
@@ -79,15 +80,20 @@ def save_state():
 	for match in bot.active_matches:
 		matches.append(match.serialize())
 
-	f = open("saved_state.json", 'w')
-	f.write(json.dumps(dict(
-		queues=queues,
-		matches=matches,
-		allow_offline=bot.allow_offline,
-		expire=bot.expire.serialize(),
-		queue_embeds=queue_embeds_data
-	)))
-	f.close()
+	state_data = {
+		'queues': queues,
+		'matches': matches,
+		'allow_offline': bot.allow_offline,
+		'expire': bot.expire.serialize(),
+		'queue_embeds': queue_embeds_data
+	}
+
+	try:
+		with open("saved_state.json", 'w') as f:
+			json.dump(state_data, f, indent=2)
+		log.info("State saved successfully")
+	except Exception as e:
+		log.error(f"Failed to save state: {str(e)}")
 
 
 async def load_state():
@@ -95,11 +101,15 @@ async def load_state():
 		with open("saved_state.json", "r") as f:
 			data = json.loads(f.read())
 	except IOError:
+		log.info("No saved state found")
+		return
+	except json.JSONDecodeError as e:
+		log.error(f"Failed to parse saved state: {str(e)}")
 		return
 
 	log.info("Loading state...")
 
-	bot.allow_offline = list(data['allow_offline'])
+	bot.allow_offline = list(data.get('allow_offline', []))
 
 	# First, recreate all queue channels
 	if 'queue_embeds' in data:
@@ -114,7 +124,7 @@ async def load_state():
 					log.error(f"Failed to recreate queue channel {channel_id}: {str(e)}")
 
 	# Then load queue states
-	for qd in data['queues']:
+	for qd in data.get('queues', []):
 		if qd.get('queue_type') in ['PickupQueue', None]:
 			try:
 				await bot.PickupQueue.from_json(qd)
@@ -123,13 +133,13 @@ async def load_state():
 		else:
 			log.error(f"Got unknown queue type '{qd.get('queue_type')}'.")
 
-	for md in data['matches']:
+	for md in data.get('matches', []):
 		try:
 			await bot.Match.from_json(md)
 		except bot.Exc.ValueError as e:
 			log.error(f"Failed to load match {md['match_id']}: {str(e)}")
 
-	if 'expire' in data.keys():
+	if 'expire' in data:
 		await bot.expire.load_json(data['expire'])
 
 	# Finally, recreate queue embeds
@@ -151,6 +161,8 @@ async def load_state():
 							bot.commands.queues.keep_embed_at_bottom(channel, queue_name, message_id)
 						)
 						log.info(f"Started background task for queue {queue_name} in channel {channel.name}")
+
+	log.info("State loaded successfully")
 
 
 async def remove_players(*users, reason=None):
