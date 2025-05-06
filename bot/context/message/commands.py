@@ -43,12 +43,10 @@ async def on_message(message):
 		f, args = _commands.get('add'), []
 	elif message.content == "--":
 		f, args = _commands.get('remove'), []
-
 	elif message.content[0] == qc.cfg.prefix:
 		cmd_args = message.content[1:].split(' ', 1)
 		f = _commands.get(cmd_args[0])
 		args = cmd_args[1:]
-
 	else:
 		return
 
@@ -64,6 +62,18 @@ async def on_message(message):
 
 		try:
 			await f(ctx, *args)
+			
+			# Update queue embeds after processing ++ or -- commands
+			if message.content in ["++", "--"]:
+				# For ++, update all default queues
+				if message.content == "++":
+					for q in [q for q in qc.queues if q.cfg.is_default]:
+						await update_queue_embed(message.channel, q.name)
+				# For --, update all queues the user was in
+				else:
+					for q in [q for q in qc.queues if q.is_added(message.author)]:
+						await update_queue_embed(message.channel, q.name)
+						
 		except bot.Exc.PubobotException as e:
 			await ctx.error(str(e), title=e.__class__.__name__)
 		except Exception as e:

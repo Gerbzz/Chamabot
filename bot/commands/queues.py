@@ -32,11 +32,19 @@ async def update_queue_embed(channel, queue_name: str):
 			print(f"❌ Queue {queue_name} not found")
 			return
 			
-		# Get the view
-		view = qc.queue_views.get(queue_name)
-		if not view:
-			print(f"❌ No view found for queue {queue_name}")
-			return
+		# Create new view if it doesn't exist
+		if queue_name not in qc.queue_views:
+			print(f"📝 Creating new view for queue {queue_name}")
+			view = View(timeout=None)
+			join_button = Button(label="Join", style=ButtonStyle.green, custom_id=f"join_{queue_name}")
+			leave_button = Button(label="Leave", style=ButtonStyle.red, custom_id=f"leave_{queue_name}")
+			join_button.callback = join_callback
+			leave_button.callback = leave_callback
+			view.add_item(join_button)
+			view.add_item(leave_button)
+			qc.queue_views[queue_name] = view
+		else:
+			view = qc.queue_views[queue_name]
 			
 		# Create new embed
 		embed = Embed(
@@ -58,16 +66,30 @@ async def update_queue_embed(channel, queue_name: str):
 			)
 			
 		# Update the message
-		if queue_name in qc.queue_embeds:
+		channel_key = f"{queue_name}_{channel.id}"
+		if channel_key in qc.queue_embeds:
 			try:
-				message = await channel.fetch_message(qc.queue_embeds[queue_name])
-				await message.edit(embed=embed)
+				message = await channel.fetch_message(qc.queue_embeds[channel_key])
+				await message.edit(embed=embed, view=view)
 				print(f"✅ Updated queue embed for {queue_name}")
 			except Exception as e:
 				print(f"❌ Error updating embed: {str(e)}")
+				# If we can't update, create a new message
+				message = await channel.send(embed=embed, view=view)
+				qc.queue_embeds[channel_key] = message.id
+				print(f"✅ Created new embed")
+		else:
+			# Send new message if we don't have one
+			message = await channel.send(embed=embed, view=view)
+			qc.queue_embeds[channel_key] = message.id
+			print(f"✅ Created new embed")
 				
 	except Exception as e:
 		print(f"Error in update_queue_embed: {str(e)}")
+		print(f"Type: {type(e)}")
+		import traceback
+		print("Traceback:")
+		print(traceback.format_exc())
 
 async def move_embed_to_bottom(channel, queue_name: str, message_id: int):
 	"""Move the queue embed to the bottom of the channel"""
