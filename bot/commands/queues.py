@@ -572,17 +572,20 @@ async def queue_embed(ctx, queue_name: str):
 				message = await ctx.channel.fetch_message(current_qc.queue_embeds[channel_key])
 				await message.edit(embed=embed, view=view)
 				print(f"✅ Updated existing embed")
+				message_created = False
 			except Exception as e:
 				print(f"ℹ️ Could not update existing message, creating new one: {str(e)}")
 				# If we can't update, create a new message
 				message = await ctx.channel.send(embed=embed, view=view)
 				current_qc.queue_embeds[channel_key] = message.id
 				print(f"✅ Created new embed")
+				message_created = True
 		else:
 			# Send new message if we don't have one
 			message = await ctx.channel.send(embed=embed, view=view)
 			current_qc.queue_embeds[channel_key] = message.id
 			print(f"✅ Created new embed")
+			message_created = True
 		
 		# Register the view with the bot for persistence
 		dc.add_view(view, message_id=message.id)
@@ -599,6 +602,12 @@ async def queue_embed(ctx, queue_name: str):
 		save_queue_data()
 		
 		print("✅ Queue embed updated")
+
+		# Respond to the interaction with a success message
+		if message_created:
+			await ctx.success(f"Queue embed for **{queue_name}** has been created.")
+		else:
+			await ctx.success(f"Queue embed for **{queue_name}** has been updated.")
 		
 	except Exception as e:
 		print(f"❌ Error in queue_embed: {str(e)}")
@@ -839,7 +848,7 @@ async def remove_queue_embed(ctx, queue_name: str):
 				# Save queue data
 				save_queue_data()
 				
-				await ctx.reply(f"Queue embed for **{queue_name}** has been removed.")
+				await ctx.success(f"Queue embed for **{queue_name}** has been removed.")
 			except Exception as e:
 				print(f"❌ Error deleting message: {str(e)}")
 				await ctx.error(f"Failed to delete queue embed: {str(e)}")
