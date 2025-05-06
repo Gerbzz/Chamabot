@@ -74,7 +74,6 @@ class DiscordClient(nextcord.Client):
 					raise KeyError('a command with this alias already exists')
 
 				self.commands[alias] = coro
-				log.debug('{} command alias registered from {}.'.format(alias, coro.__module__))
 
 		return wrapper
 

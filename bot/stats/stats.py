@@ -116,7 +116,6 @@ async def next_match():
 	""" Increase match_id counter, return current match_id """
 	counter = await db.select_one(('next_id',), 'qc_match_id_counter')
 	await db.update('qc_match_id_counter', dict(next_id=counter['next_id']+1))
-	log.debug(f"Current match_id is {counter['next_id']}")
 	return counter['next_id']
 
 

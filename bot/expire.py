@@ -49,7 +49,6 @@ class ExpireTimer:
 	def set(self, qc, member, delay):
 		new_task = self.ExpireTask(qc, member, int(time.time()+delay))
 		self.tasks[new_task.hash] = new_task
-		log.debug(f"EXPIRE TIMER SET > {member.name} ({qc.id}/{member.id}) to {delay}")
 		self._define_next()
 
 	def get(self, qc, member):
@@ -58,7 +57,6 @@ class ExpireTimer:
 	def _define_next(self):
 		if len(self.tasks):
 			self.next = sorted(self.tasks.values(), key=lambda task: task.at)[0]
-			log.debug(f"EXPIRE TIMER NEXT > {self.next.member.name} ({self.next.qc.id}/{self.next.member.id})")
 		else:
 			self.next = None
 
@@ -66,14 +64,12 @@ class ExpireTimer:
 		key = str(qc.id) + "_" + str(member.id)
 		if key in self.tasks.keys():
 			task = self.tasks.pop(key)
-			log.debug(f"EXPIRE TIMER CANCEL > {task.member.name} ({task.qc.id}/{task.member.id})")
 			if self.next and self.next.hash == key:
 				self._define_next()
 
 	async def think(self, frame_time):
 		if self.next and frame_time >= self.next.at:
 			task = self.tasks.pop(self.next.hash)
-			log.debug(f"EXPIRE TIMER TRIGGER > {task.member.name} ({task.qc.id}/{task.member.id})")
 			self._define_next()
 			if task.qc and task.member:
 				await task.qc.remove_members(task.member, reason="expire", highlight=True)
