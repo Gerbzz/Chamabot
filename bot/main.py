@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 import traceback
 import json
-from nextcord import Interaction
+from nextcord import Interaction, Embed, ButtonStyle
+from nextcord.ui import View, Button
 import logging
 import nextcord.ext.commands
 import asyncio
@@ -9,7 +10,7 @@ import asyncio
 from core.console import log
 from core.database import db
 from core.config import cfg
-from core.utils import error_embed, ok_embed, get
+from core.utils import error_embed, ok_embed, get, find
 from core.client import dc
 
 import bot
@@ -169,8 +170,8 @@ async def load_state():
 									
 								# Create the view
 								view = View(timeout=None)
-								join_button = Button(label="Join", style=ButtonStyle.green.value, custom_id=f"join_{queue_name}")
-								leave_button = Button(label="Leave", style=ButtonStyle.red.value, custom_id=f"leave_{queue_name}")
+								join_button = Button(label="Join", style=ButtonStyle.green, custom_id=f"join_{queue_name}")
+								leave_button = Button(label="Leave", style=ButtonStyle.red, custom_id=f"leave_{queue_name}")
 								join_button.callback = bot.commands.queues.join_callback
 								leave_button.callback = bot.commands.queues.leave_callback
 								view.add_item(join_button)
@@ -203,13 +204,22 @@ async def load_state():
 								# Register the view with the bot
 								dc.add_view(view, message_id=new_message.id)
 								
-								# Start background task
+								# Start background task to keep embed at bottom
 								task_key = f"{channel_id}_{queue_name}"
 								if task_key in bot.queue_tasks:
 									bot.queue_tasks[task_key].cancel()
 								bot.queue_tasks[task_key] = asyncio.create_task(
 									bot.commands.queues.keep_embed_at_bottom(channel, queue_name, new_message.id)
 								)
+								
+								# Try to delete the old message
+								try:
+									old_message = await channel.fetch_message(message_id)
+									await old_message.delete()
+									log.info(f"Deleted old queue embed for {queue_name}")
+								except Exception as e:
+									log.error(f"Could not delete old queue embed: {str(e)}")
+								
 								log.info(f"Recreated queue embed for {queue_name} in {channel.name}")
 							except Exception as e:
 								log.error(f"Failed to recreate queue embed for {queue_name}: {str(e)}")
