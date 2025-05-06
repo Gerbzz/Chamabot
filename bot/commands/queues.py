@@ -795,14 +795,37 @@ async def leave_callback(interaction):
 			
 		# Create a SlashContext for the interaction
 		ctx = bot.context.slash.context.SlashContext(qc, interaction)
+		
+		# Find the queue in the channel
+		q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
+		if not q:
+			await interaction.response.send_message(f"Queue {queue_name} not found", ephemeral=True)
+			return
+			
+		# Check if user is in the queue
+		if not q.is_added(interaction.user):
+			await interaction.response.send_message(f"You are not in the {queue_name} queue", ephemeral=True)
+			return
 			
 		# Remove the user from the queue
-		# Note: remove() will handle updating both normal and global embeds
-		await remove(ctx, queue_name)
+		q.pop_members(interaction.user)
+		
+		# Update both normal and global embeds
+		# First update the normal queue embed in the queue's channel
+		await update_queue_embed(ctx, queue_name)
+		
+		# Then update all global embeds for this queue
+		await update_global_queue_embed(channel, queue_name, qc.id)
+		
+		# Send a public response
+		await interaction.response.send_message(f"{interaction.user.mention} has left the {queue_name} queue")
 			
 	except Exception as e:
 		print(f"Error in leave_callback: {str(e)}")
-		await interaction.response.send_message("An error occurred while leaving the queue.", ephemeral=True)
+		try:
+			await interaction.response.send_message("An error occurred while leaving the queue.", ephemeral=True)
+		except:
+			pass
 
 async def remove_queue_embed(ctx, queue_name: str):
 	"""Remove a queue embed from the channel"""
