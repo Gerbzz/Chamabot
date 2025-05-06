@@ -410,6 +410,16 @@ async def queue_embed(ctx, queue_name: str):
 			try:
 				print(f"📝 Updating existing embed for queue: {q.name}")
 				message = await ctx.channel.fetch_message(ctx.qc.queue_embeds[q.name])
+				
+				# Delete any messages that came after our embed
+				async for msg in ctx.channel.history(after=message):
+					try:
+						await msg.delete()
+						print(f"🗑️ Deleted message {msg.id}")
+					except Exception as e:
+						print(f"❌ Failed to delete message {msg.id}: {str(e)}")
+				
+				# Move our embed to the bottom
 				await message.edit(embed=embed, view=view)
 				print("✅ Successfully updated existing embed")
 				return
