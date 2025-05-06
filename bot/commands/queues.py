@@ -303,8 +303,12 @@ async def queue_embed(ctx, queue_name: str):
 	# Create action row
 	action_row = ActionRow([join_button, leave_button])
 
+	# Initialize queue_embeds if it doesn't exist
+	if not hasattr(ctx.qc, 'queue_embeds'):
+		ctx.qc.queue_embeds = {}
+
 	# Check if we already have an embed for this queue
-	if hasattr(ctx.qc, 'queue_embeds') and queue_name in ctx.qc.queue_embeds:
+	if queue_name in ctx.qc.queue_embeds:
 		try:
 			# Try to edit existing message
 			message = await ctx.channel.fetch_message(ctx.qc.queue_embeds[queue_name])
@@ -318,11 +322,11 @@ async def queue_embed(ctx, queue_name: str):
 	message = await ctx.channel.send(embed=embed, components=[action_row])
 	
 	# Store message ID
-	if not hasattr(ctx.qc, 'queue_embeds'):
-		ctx.qc.queue_embeds = {}
 	ctx.qc.queue_embeds[queue_name] = message.id
 
-	# Add button callback
+	# Initialize button_callbacks if it doesn't exist
 	if not hasattr(ctx.qc, 'button_callbacks'):
 		ctx.qc.button_callbacks = {}
+	
+	# Add button callback
 	ctx.qc.button_callbacks[queue_name] = lambda i: _handle_queue_button(i, queue_name, ctx)
