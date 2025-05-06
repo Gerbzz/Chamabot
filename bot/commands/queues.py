@@ -240,7 +240,7 @@ async def keep_embed_at_bottom(channel, queue_name, message_id):
 					message_id = new_message.id
 
 					# Also update any global embeds, passing the queue channel ID
-					await update_global_queue_embed(channel, queue_name, ctx.channel.id)
+					await update_global_queue_embed(channel, queue_name, channel.id)
 
 				except Exception as e:
 					print(f"❌ Error moving embed to bottom: {str(e)}")
