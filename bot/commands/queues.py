@@ -1370,17 +1370,37 @@ async def remove_global_queue_embed(ctx, queue_name: str, queue_channel_id: int 
 def save_global_queue_data():
 	"""Save global queue embed message IDs to database"""
 	try:
+		print("\n==================================================")
+		print("💾 SAVING GLOBAL QUEUE DATA")
+		print("==================================================")
+		
 		# Get all global queue embeds
 		queue_data = {}
 		for key, message_id in global_queue_embeds.items():
 			queue_data[key] = message_id
+			print(f"📝 Saving {key}: {message_id}")
+		
+		print(f"\n📦 Queue Data: {queue_data}")
 		
 		# Save to database
 		with open('global_queue_data.json', 'w') as f:
-			json.dump(queue_data, f)
+			json.dump(queue_data, f, indent=2)
 		print("✅ Saved global queue data to database")
+		
+		# Verify the save
+		try:
+			with open('global_queue_data.json', 'r') as f:
+				saved_data = json.load(f)
+			print(f"✓ Verified save - Read back {len(saved_data)} entries")
+		except Exception as e:
+			print(f"⚠️ Could not verify save: {str(e)}")
+			
 	except Exception as e:
 		print(f"❌ Error saving global queue data: {str(e)}")
+		print(f"Type: {type(e)}")
+		import traceback
+		print("Traceback:")
+		print(traceback.format_exc())
 
 def load_global_queue_data():
 	"""Load global queue embed message IDs from database"""
@@ -1401,15 +1421,27 @@ def load_global_queue_data():
 def load_global_queue_data_from_state(data):
 	if 'global_queue_embeds' in data:
 		try:
+			print("\n==================================================")
+			print("🔄 LOADING GLOBAL QUEUE EMBEDS FROM STATE")
+			print("==================================================")
+			print(f"📦 Data: {data['global_queue_embeds']}")
+			
 			for key, message_id in data['global_queue_embeds'].items():
+				print(f"\n📝 Processing key: {key}")
+				print(f"🔑 Message ID: {message_id}")
+				
 				global_queue_embeds[key] = message_id
 				
 				# Register view for this message
 				try:
 					parts = key.split('_')
+					print(f"📋 Parts: {parts}")
+					
 					if len(parts) >= 4 and parts[0] == "global":
 						queue_name = parts[1]
 						queue_channel_id = int(parts[3])
+						print(f"✨ Queue Name: {queue_name}")
+						print(f"📍 Queue Channel ID: {queue_channel_id}")
 						
 						# Create and register the view
 						view = View(timeout=None)
@@ -1434,13 +1466,23 @@ def load_global_queue_data_from_state(data):
 						
 						# Register the view
 						dc.add_view(view, message_id=message_id)
+						print(f"✅ Registered view for message {message_id}")
 				except Exception as e:
 					print(f"❌ Error registering view for global embed {key}: {str(e)}")
+					print(f"Type: {type(e)}")
+					import traceback
+					print("Traceback:")
+					print(traceback.format_exc())
 					continue
 					
-			print("✅ Loaded global queue embeds from saved state")
+			print("\n✅ Loaded global queue embeds from saved state")
+			print(f"📊 Current global embeds: {list(global_queue_embeds.keys())}")
 		except Exception as e:
 			print(f"❌ Error loading global queue embeds: {str(e)}")
+			print(f"Type: {type(e)}")
+			import traceback
+			print("Traceback:")
+			print(traceback.format_exc())
 
 # Modify save_state to also save global queue embeds
 def save_state():

@@ -85,7 +85,8 @@ def save_state():
 		'matches': matches,
 		'allow_offline': bot.allow_offline,
 		'expire': bot.expire.serialize(),
-		'queue_embeds': queue_embeds_data
+		'queue_embeds': queue_embeds_data,
+		'global_queue_embeds': bot.commands.queues.global_queue_embeds
 	}
 
 	try:
