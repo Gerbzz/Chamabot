@@ -418,15 +418,35 @@ async def queue_embed(ctx, queue_name: str):
 	print("==================================================")
 	print(f"🎯 Queue: {queue_name}")
 	print(f"👤 Context type: {type(ctx)}")
+	print(f"🏠 Server: {ctx.guild.name}")
 	
 	try:
-		# Find the queue
-		q = find(lambda i: i.name.lower() == queue_name.lower(), ctx.qc.queues)
-		if not q:
-			print("❌ Queue not found")
-			await ctx.error(f"Queue {queue_name} not found")
+		# Find all queue channels in this server
+		server_queue_channels = {
+			channel_id: qc for channel_id, qc in bot.queue_channels.items()
+			if qc.guild.id == ctx.guild.id
+		}
+		
+		if not server_queue_channels:
+			print("❌ No queue channels found in this server")
+			await ctx.error("No queue channels found in this server")
 			return
-		print("✅ Found queue")
+			
+		# Find the queue across all channels in this server
+		q = None
+		source_qc = None
+		for channel_id, qc in server_queue_channels.items():
+			found_q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
+			if found_q:
+				q = found_q
+				source_qc = qc
+				break
+				
+		if not q:
+			print("❌ Queue not found in this server")
+			await ctx.error(f"Queue {queue_name} not found in this server")
+			return
+		print(f"✅ Found queue in channel {source_qc.channel.name}")
 		
 		# Check if queue is empty
 		if len(q.queue) == 0:
@@ -466,7 +486,7 @@ async def queue_embed(ctx, queue_name: str):
 				inline=False
 			)
 		
-		# Check if we already have a message for this queue
+		# Check if we already have a message for this queue in this channel
 		if queue_name in ctx.qc.queue_embeds:
 			print(f"📝 Updating existing embed for queue: {queue_name}")
 			try:
