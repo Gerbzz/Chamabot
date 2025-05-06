@@ -17,7 +17,7 @@ async def queues(interaction: Interaction, queue: str) -> List[str]:
 			for q in qc.queues:
 				if q.name.lower().startswith(queue.lower()):
 					# Add channel information in parentheses
-					channel = bot.dc.get_channel(qc.id)  # Get the actual TextChannel object
+					channel = interaction.client.get_channel(qc.id)  # Get the actual TextChannel object
 					channel_name = channel.name if channel else "unknown-channel"
 					all_queues.append(f"{q.name} (#{channel_name})")
 		return all_queues[:25]  # Limit to 25 results
