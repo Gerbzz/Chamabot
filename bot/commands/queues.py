@@ -345,21 +345,44 @@ async def queue_embed(ctx, queue_name: str):
 			print(f"[DEBUG] Queue: {q.name}")
 			print(f"[DEBUG] User: {interaction.user.display_name} (ID: {interaction.user.id})")
 			print(f"[DEBUG] Current queue state: {[p.display_name for p in q.queue]}")
+			print(f"[DEBUG] Queue config: {q.cfg.__dict__ if hasattr(q, 'cfg') else 'No config'}")
+			print(f"[DEBUG] Queue status: {q.status}")
+			print(f"[DEBUG] Queue length: {len(q.queue)}")
+			print(f"[DEBUG] Queue max size: {q.cfg.max_size if hasattr(q.cfg, 'max_size') else 'No max size'}")
 			
-			resp = await q.add_member(ctx, interaction.user)
-			print(f"[DEBUG] Add member response: {resp}")
-			
-			if resp == bot.Qr.Success:
-				print("[DEBUG] ✅ Successfully added user to queue")
-				await ctx.qc.update_expire(interaction.user)
-				await interaction.response.send_message("You have joined the queue!", ephemeral=True)
-			elif resp == bot.Qr.QueueStarted:
-				print("[DEBUG] Queue has started")
-				await interaction.response.send_message("Queue has started!", ephemeral=True)
-			else:
-				print(f"[DEBUG] ❌ Failed to add user to queue: {resp}")
-				await interaction.response.send_message("Could not join the queue!", ephemeral=True)
-			await queue_embed(ctx, q.name)
+			try:
+				print("[DEBUG] Attempting to add member to queue...")
+				resp = await q.add_member(ctx, interaction.user)
+				print(f"[DEBUG] Add member response: {resp}")
+				print(f"[DEBUG] Response type: {type(resp)}")
+				
+				if resp == bot.Qr.Success:
+					print("[DEBUG] ✅ Successfully added user to queue")
+					print("[DEBUG] Updating expire timer...")
+					await ctx.qc.update_expire(interaction.user)
+					print("[DEBUG] Sending success message...")
+					await interaction.response.send_message("You have joined the queue!", ephemeral=True)
+				elif resp == bot.Qr.QueueStarted:
+					print("[DEBUG] Queue has started")
+					await interaction.response.send_message("Queue has started!", ephemeral=True)
+				else:
+					print(f"[DEBUG] ❌ Failed to add user to queue: {resp}")
+					print(f"[DEBUG] Response enum value: {resp.value if hasattr(resp, 'value') else 'No value'}")
+					await interaction.response.send_message("Could not join the queue!", ephemeral=True)
+				
+				print("[DEBUG] Updating queue embed...")
+				await queue_embed(ctx, q.name)
+				print("[DEBUG] Queue embed updated")
+			except Exception as e:
+				print(f"[DEBUG] ❌ Error in join callback: {str(e)}")
+				print(f"[DEBUG] Error type: {type(e)}")
+				print(f"[DEBUG] Error traceback:")
+				import traceback
+				print(traceback.format_exc())
+				try:
+					await interaction.response.send_message("An error occurred while joining the queue!", ephemeral=True)
+				except Exception as e2:
+					print(f"[DEBUG] ❌ Failed to send error message: {str(e2)}")
 
 		async def leave_callback(interaction):
 			print(f"\n[DEBUG] ===== Leave button callback triggered =====")
