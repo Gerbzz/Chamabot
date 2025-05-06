@@ -424,7 +424,7 @@ async def queue_embed(ctx, queue_name: str):
 		# Find all queue channels in this server
 		server_queue_channels = {
 			channel_id: qc for channel_id, qc in bot.queue_channels.items()
-			if qc.guild.id == ctx.interaction.guild.id
+			if qc.channel.guild.id == ctx.interaction.guild.id
 		}
 		
 		if not server_queue_channels:
