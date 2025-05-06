@@ -616,13 +616,19 @@ async def recreate_queue_embeds():
 				
 			try:
 				# Get the channel
-				channel = bot.get_channel(channel_id)
+				channel = dc.get_channel(channel_id)
 				if not channel:
 					print(f"❌ Could not find channel {channel_id} for queue {queue_name}")
 					continue
 				
+				# Get the queue channel
+				qc = bot.queue_channels.get(channel_id)
+				if not qc:
+					print(f"❌ Could not find queue channel for {channel_id}")
+					continue
+				
 				# Get the queue
-				q = find(lambda i: i.name.lower() == queue_name.lower(), ctx.qc.queues)
+				q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
 				if not q:
 					print(f"❌ Could not find queue {queue_name}")
 					continue
@@ -635,7 +641,7 @@ async def recreate_queue_embeds():
 				leave_button.callback = leave_callback
 				view.add_item(join_button)
 				view.add_item(leave_button)
-				ctx.qc.queue_views[queue_name] = view
+				qc.queue_views[queue_name] = view
 				
 				# Create the embed
 				embed = Embed(
@@ -658,20 +664,37 @@ async def recreate_queue_embeds():
 				
 				# Send new embed
 				new_message = await channel.send(embed=embed, view=view)
-				queue_embeds[queue_name] = new_message.id
+				
+				# Update the stored message ID
+				channel_key = f"{queue_name}_{channel_id}"
+				qc.queue_embeds[channel_key] = new_message.id
+				
+				# Register the view with the bot
+				dc.add_view(view, message_id=new_message.id)
 				
 				# Start background task
-				bot.loop.create_task(keep_embed_at_bottom(ctx.channel, queue_name, new_message.id))
+				task_key = f"{channel_id}_{queue_name}"
+				if task_key in queue_tasks:
+					queue_tasks[task_key].cancel()
+				queue_tasks[task_key] = asyncio.create_task(keep_embed_at_bottom(channel, queue_name, new_message.id))
 				print(f"✅ Recreated queue embed for {queue_name}")
 				
 			except Exception as e:
 				print(f"❌ Error recreating queue embed for {queue_name}: {str(e)}")
+				print(f"Type: {type(e)}")
+				import traceback
+				print("Traceback:")
+				print(traceback.format_exc())
 				
 		# Save updated data
 		save_queue_data()
 		
 	except Exception as e:
 		print(f"❌ Error in recreate_queue_embeds: {str(e)}")
+		print(f"Type: {type(e)}")
+		import traceback
+		print("Traceback:")
+		print(traceback.format_exc())
 
 async def join_callback(interaction):
 	"""Callback for the join button"""
