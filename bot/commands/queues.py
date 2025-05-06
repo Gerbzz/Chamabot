@@ -57,8 +57,8 @@ async def update_queue_embed(ctx, queue_name):
 
 		# Create the view
 		view = View(timeout=None)
-		join_button = Button(label="Join", style=ButtonStyle.green, custom_id=f"join_{queue_name}")
-		leave_button = Button(label="Leave", style=ButtonStyle.red, custom_id=f"leave_{queue_name}")
+		join_button = Button(label="Join", style=ButtonStyle.green.value, custom_id=f"join_{queue_name}")
+		leave_button = Button(label="Leave", style=ButtonStyle.red.value, custom_id=f"leave_{queue_name}")
 		join_button.callback = join_callback
 		leave_button.callback = leave_callback
 		view.add_item(join_button)
@@ -120,8 +120,8 @@ async def move_embed_to_bottom(channel, queue_name: str, message_id: int):
 		if queue_name not in qc.queue_views:
 			print(f"📝 Creating new view for queue {queue_name}")
 			view = View(timeout=None)
-			join_button = Button(label="Join", style=ButtonStyle.green, custom_id=f"join_{queue_name}")
-			leave_button = Button(label="Leave", style=ButtonStyle.red, custom_id=f"leave_{queue_name}")
+			join_button = Button(label="Join", style=ButtonStyle.green.value, custom_id=f"join_{queue_name}")
+			leave_button = Button(label="Leave", style=ButtonStyle.red.value, custom_id=f"leave_{queue_name}")
 			join_button.callback = join_callback
 			leave_button.callback = leave_callback
 			view.add_item(join_button)
@@ -176,11 +176,17 @@ async def keep_embed_at_bottom(channel, queue_name, message_id):
 	"""Background task to keep queue embed at the bottom of the channel"""
 	while True:
 		try:
-			# Get the message
-			message = await channel.fetch_message(message_id)
-			if not message:
-				log.error(f"Could not find message {message_id} in channel {channel.name}")
-				break
+			# Check if we're already at the bottom
+			is_at_bottom = False
+			try:
+				# Get the last message in the channel
+				async for last_message in channel.history(limit=1):
+					# If our message is already the last one, just update it
+					if last_message.id == message_id:
+						is_at_bottom = True
+						break
+			except Exception as e:
+				log.error(f"Error checking if message is at bottom: {str(e)}")
 
 			# Get the queue channel
 			qc = bot.queue_channels.get(channel.id)
@@ -194,7 +200,7 @@ async def keep_embed_at_bottom(channel, queue_name, message_id):
 				log.error(f"Could not find queue {queue_name}")
 				break
 
-			# Update the embed
+			# Create the embed
 			embed = Embed(
 				title=f"{q.name} Queue",
 				description="Current queued players:",
@@ -215,34 +221,47 @@ async def keep_embed_at_bottom(channel, queue_name, message_id):
 
 			# Create the view
 			view = View(timeout=None)
-			join_button = Button(label="Join", style=ButtonStyle.green, custom_id=f"join_{queue_name}")
-			leave_button = Button(label="Leave", style=ButtonStyle.red, custom_id=f"leave_{queue_name}")
+			join_button = Button(label="Join", style=ButtonStyle.green.value, custom_id=f"join_{queue_name}")
+			leave_button = Button(label="Leave", style=ButtonStyle.red.value, custom_id=f"leave_{queue_name}")
 			join_button.callback = join_callback
 			leave_button.callback = leave_callback
 			view.add_item(join_button)
 			view.add_item(leave_button)
 			qc.queue_views[queue_name] = view
 
-			# Try to update the message
-			try:
-				await message.edit(embed=embed, view=view)
-			except Exception as e:
-				log.error(f"Failed to update message {message_id}: {str(e)}")
-				# If update fails, try to send a new message
+			if is_at_bottom:
+				# If we're at the bottom, just update the existing message
 				try:
-					new_message = await channel.send(embed=embed, view=view)
-					# Update the stored message ID
-					channel_key = f"{queue_name}_{channel.id}"
-					qc.queue_embeds[channel_key] = new_message.id
-					# Delete the old message
-					try:
-						await message.delete()
-					except Exception as e:
-						log.error(f"Failed to delete old message {message_id}: {str(e)}")
+					message = await channel.fetch_message(message_id)
+					await message.edit(embed=embed, view=view)
+					log.info(f"Updated queue embed for {queue_name} (already at bottom)")
 				except Exception as e:
-					log.error(f"Failed to send new message: {str(e)}")
+					log.error(f"Error updating message: {str(e)}")
+					# If we can't update, send a new message
+					new_message = await channel.send(embed=embed, view=view)
+					message_id = new_message.id
+					channel_key = f"{queue_name}_{channel.id}"
+					qc.queue_embeds[channel_key] = message_id
+					dc.add_view(view, message_id=message_id)
+					log.info(f"Created new queue embed for {queue_name} (update failed)")
+			else:
+				# If we're not at the bottom, delete old message and send a new one
+				try:
+					old_message = await channel.fetch_message(message_id)
+					await old_message.delete()
+					log.info(f"Deleted old embed for {queue_name}")
+				except Exception as e:
+					log.error(f"Error deleting old message: {str(e)}")
 
-			# Wait before next update
+				# Send new message at the bottom
+				new_message = await channel.send(embed=embed, view=view)
+				message_id = new_message.id
+				channel_key = f"{queue_name}_{channel.id}"
+				qc.queue_embeds[channel_key] = message_id
+				dc.add_view(view, message_id=message_id)
+				log.info(f"Created new queue embed for {queue_name} at bottom")
+
+			# Wait before next check
 			await asyncio.sleep(30)
 		except Exception as e:
 			log.error(f"Error in keep_embed_at_bottom: {str(e)}")
@@ -506,7 +525,7 @@ async def queue_embed(ctx, queue_name: str):
 		
 		# Join button
 		join_button = Button(
-			style=ButtonStyle.green,
+			style=ButtonStyle.green.value,
 			label="Join Queue",
 			custom_id=f"join_{queue_name}"
 		)
@@ -515,7 +534,7 @@ async def queue_embed(ctx, queue_name: str):
 		
 		# Leave button
 		leave_button = Button(
-			style=ButtonStyle.red,
+			style=ButtonStyle.red.value,
 			label="Leave Queue",
 			custom_id=f"leave_{queue_name}"
 		)
@@ -659,8 +678,8 @@ async def recreate_queue_embeds():
 				
 				# Create the view
 				view = View(timeout=None)
-				join_button = Button(label="Join", style=ButtonStyle.green, custom_id=f"join_{queue_name}")
-				leave_button = Button(label="Leave", style=ButtonStyle.red, custom_id=f"leave_{queue_name}")
+				join_button = Button(label="Join", style=ButtonStyle.green.value, custom_id=f"join_{queue_name}")
+				leave_button = Button(label="Leave", style=ButtonStyle.red.value, custom_id=f"leave_{queue_name}")
 				join_button.callback = join_callback
 				leave_button.callback = leave_callback
 				view.add_item(join_button)

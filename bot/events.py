@@ -92,12 +92,12 @@ async def on_ready():
 						try:
 							# Create buttons for the queue
 							join_button = Button(
-								style=ButtonStyle.green,
+								style=ButtonStyle.green.value,
 								label="Join",
 								custom_id=f"join_{queue.name}"
 							)
 							leave_button = Button(
-								style=ButtonStyle.red,
+								style=ButtonStyle.red.value,
 								label="Leave",
 								custom_id=f"leave_{queue.name}"
 							)
