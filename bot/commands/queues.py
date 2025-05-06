@@ -452,10 +452,17 @@ async def queue_embed(ctx, queue_name: str):
 		if len(q.queue) == 0:
 			print("👥 Queue is empty")
 		
+		# Get or create QueueChannel for current channel
+		current_qc = bot.queue_channels.get(ctx.channel.id)
+		if not current_qc:
+			print(f"📝 Creating new QueueChannel for channel {ctx.channel.id}")
+			current_qc = bot.QueueChannel(ctx.channel)
+			bot.queue_channels[ctx.channel.id] = current_qc
+		
 		# Create or get the view
-		if queue_name in ctx.qc.queue_views:
+		if queue_name in current_qc.queue_views:
 			print(f"📝 Using existing view for queue: {queue_name}")
-			view = ctx.qc.queue_views[queue_name]
+			view = current_qc.queue_views[queue_name]
 		else:
 			print(f"📝 Creating new view for queue: {queue_name}")
 			view = View(timeout=None)
@@ -465,7 +472,7 @@ async def queue_embed(ctx, queue_name: str):
 			leave_button.callback = leave_callback
 			view.add_item(join_button)
 			view.add_item(leave_button)
-			ctx.qc.queue_views[queue_name] = view
+			current_qc.queue_views[queue_name] = view
 		
 		# Create the embed
 		embed = Embed(
@@ -487,24 +494,23 @@ async def queue_embed(ctx, queue_name: str):
 			)
 		
 		# Check if we already have a message for this queue in this channel
-		if queue_name in ctx.qc.queue_embeds:
+		if queue_name in current_qc.queue_embeds:
 			print(f"📝 Updating existing embed for queue: {queue_name}")
 			try:
 				# Try to update the existing message
-				message = await ctx.channel.fetch_message(ctx.qc.queue_embeds[queue_name])
+				message = await ctx.channel.fetch_message(current_qc.queue_embeds[queue_name])
 				await message.edit(embed=embed, view=view)
 				print(f"✅ Updated existing embed")
 			except Exception as e:
 				print(f"ℹ️ Could not update existing message, creating new one: {str(e)}")
 				# If we can't update, create a new message
 				message = await ctx.channel.send(embed=embed, view=view)
-				ctx.qc.queue_embeds[queue_name] = message.id
+				current_qc.queue_embeds[queue_name] = message.id
 				print(f"✅ Created new embed")
 		else:
 			# Send new message if we don't have one
 			message = await ctx.channel.send(embed=embed, view=view)
-			ctx.qc.queue_embeds[queue_name] = message.id
-			queue_channels[queue_name] = ctx.channel.id
+			current_qc.queue_embeds[queue_name] = message.id
 			print(f"✅ Created new embed")
 		
 		# Start or update the background task
