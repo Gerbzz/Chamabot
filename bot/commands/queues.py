@@ -286,7 +286,10 @@ async def queue_embed(ctx, queue_name: str):
 		print(f"[DEBUG] Created buttons with IDs: join_{q.name}, leave_{q.name}")
 
 		# Create action row
-		action_row = ActionRow(join_button, leave_button)
+		action_row = ActionRow()
+		action_row.add_item(join_button)
+		action_row.add_item(leave_button)
+		print("[DEBUG] Created action row with buttons")
 
 		# Handle existing embed
 		if not hasattr(ctx.qc, 'queue_embeds'):
