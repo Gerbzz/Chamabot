@@ -301,7 +301,7 @@ async def queue_embed(ctx, queue_name: str):
 	)
 
 	# Create action row
-	action_row = ActionRow(join_button, leave_button)
+	action_row = ActionRow([join_button, leave_button])
 
 	# Check if we already have an embed for this queue
 	if hasattr(ctx.qc, 'queue_embeds') and queue_name in ctx.qc.queue_embeds:
