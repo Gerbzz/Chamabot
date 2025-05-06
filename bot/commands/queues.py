@@ -236,97 +236,106 @@ async def maps(ctx, queue: str, one: bool = False):
 
 async def _handle_queue_button(interaction, queue_name, ctx):
 	"""Handle button interactions for queue embeds"""
+	# Find the queue
 	q = find(lambda i: i.name.lower() == queue_name.lower(), ctx.qc.queues)
 	if not q:
+		await interaction.response.send_message("Queue not found!", ephemeral=True)
 		return
 
-	if interaction.custom_id == f"join_{queue_name}":
-		resp = await q.add_member(ctx, interaction.user)
-		if resp == bot.Qr.Success:
-			await ctx.qc.update_expire(interaction.user)
-			await interaction.response.send_message("You have joined the queue!", ephemeral=True)
-		elif resp == bot.Qr.QueueStarted:
-			await interaction.response.send_message("Queue started!", ephemeral=True)
-		else:
-			await interaction.response.send_message(f"Could not join queue: {resp.__name__}", ephemeral=True)
-	elif interaction.custom_id == f"leave_{queue_name}":
-		if interaction.user in q.queue:
-			q.pop_members(interaction.user)
-			if not any((q.is_added(interaction.user) for q in ctx.qc.queues)):
-				bot.expire.cancel(ctx.qc, interaction.user)
-			await interaction.response.send_message("You have left the queue!", ephemeral=True)
-		else:
-			await interaction.response.send_message("You are not in this queue!", ephemeral=True)
-	
-	# Update the embed
-	await queue_embed(ctx, queue_name)
+	try:
+		if interaction.custom_id == f"join_{queue_name}":
+			resp = await q.add_member(ctx, interaction.user)
+			if resp == bot.Qr.Success:
+				await ctx.qc.update_expire(interaction.user)
+				await interaction.response.send_message("You have joined the queue!", ephemeral=True)
+			elif resp == bot.Qr.QueueStarted:
+				await interaction.response.send_message("Queue started!", ephemeral=True)
+			else:
+				await interaction.response.send_message(f"Could not join queue: {resp.__name__}", ephemeral=True)
+		elif interaction.custom_id == f"leave_{queue_name}":
+			if interaction.user in q.queue:
+				q.pop_members(interaction.user)
+				if not any((q.is_added(interaction.user) for q in ctx.qc.queues)):
+					bot.expire.cancel(ctx.qc, interaction.user)
+				await interaction.response.send_message("You have left the queue!", ephemeral=True)
+			else:
+				await interaction.response.send_message("You are not in this queue!", ephemeral=True)
+		
+		# Update the embed
+		await queue_embed(ctx, queue_name)
+	except Exception as e:
+		await interaction.response.send_message(f"An error occurred: {str(e)}", ephemeral=True)
 
 async def queue_embed(ctx, queue_name: str):
 	"""Create or update a queue embed with join/leave buttons"""
-	# Find the queue
-	if (q := find(lambda i: i.name.lower() == queue_name.lower(), ctx.qc.queues)) is None:
-		raise bot.Exc.SyntaxError(f"Queue '{queue_name}' not found on the channel.")
+	try:
+		# Find the queue
+		q = find(lambda i: i.name.lower() == queue_name.lower(), ctx.qc.queues)
+		if not q:
+			raise bot.Exc.SyntaxError(f"Queue '{queue_name}' not found on the channel.")
 
-	# Create the embed
-	embed = Embed(
-		title=f"{queue_name} Queue",
-		description="Current queued players:",
-		color=0x7289DA
-	)
-
-	# Add queued players to embed
-	if len(q.queue):
-		embed.add_field(
-			name="Players",
-			value="\n".join([f"• {player.display_name}" for player in q.queue]),
-			inline=False
-		)
-	else:
-		embed.add_field(
-			name="Players",
-			value="No players in queue",
-			inline=False
+		# Create the embed
+		embed = Embed(
+			title=f"{queue_name} Queue",
+			description="Current queued players:",
+			color=0x7289DA
 		)
 
-	# Create buttons
-	join_button = Button(
-		style=ButtonStyle.green,
-		custom_id=f"join_{queue_name}",
-		emoji="✅"
-	)
-	leave_button = Button(
-		style=ButtonStyle.red,
-		custom_id=f"leave_{queue_name}",
-		emoji="❌"
-	)
+		# Add queued players to embed
+		if len(q.queue):
+			embed.add_field(
+				name="Players",
+				value="\n".join([f"• {player.display_name}" for player in q.queue]),
+				inline=False
+			)
+		else:
+			embed.add_field(
+				name="Players",
+				value="No players in queue",
+				inline=False
+			)
 
-	# Create action row
-	action_row = ActionRow([join_button, leave_button])
+		# Create buttons
+		join_button = Button(
+			style=ButtonStyle.green,
+			custom_id=f"join_{queue_name}",
+			emoji="✅"
+		)
+		leave_button = Button(
+			style=ButtonStyle.red,
+			custom_id=f"leave_{queue_name}",
+			emoji="❌"
+		)
 
-	# Initialize queue_embeds if it doesn't exist
-	if not hasattr(ctx.qc, 'queue_embeds'):
-		ctx.qc.queue_embeds = {}
+		# Create action row
+		action_row = ActionRow([join_button, leave_button])
 
-	# Check if we already have an embed for this queue
-	if queue_name in ctx.qc.queue_embeds:
-		try:
-			# Try to edit existing message
-			message = await ctx.channel.fetch_message(ctx.qc.queue_embeds[queue_name])
-			await message.edit(embed=embed, components=[action_row])
-			return
-		except:
-			# If message not found, we'll create a new one
-			pass
+		# Initialize queue_embeds if it doesn't exist
+		if not hasattr(ctx.qc, 'queue_embeds'):
+			ctx.qc.queue_embeds = {}
 
-	# Send new embed
-	message = await ctx.channel.send(embed=embed, components=[action_row])
-	
-	# Store message ID
-	ctx.qc.queue_embeds[queue_name] = message.id
+		# Check if we already have an embed for this queue
+		if queue_name in ctx.qc.queue_embeds:
+			try:
+				# Try to edit existing message
+				message = await ctx.channel.fetch_message(ctx.qc.queue_embeds[queue_name])
+				await message.edit(embed=embed, components=[action_row])
+				return
+			except:
+				# If message not found, we'll create a new one
+				pass
 
-	# Initialize button_callbacks if it doesn't exist
-	if not hasattr(ctx.qc, 'button_callbacks'):
-		ctx.qc.button_callbacks = {}
-	
-	# Add button callback
-	ctx.qc.button_callbacks[queue_name] = lambda i: _handle_queue_button(i, queue_name, ctx)
+		# Send new embed
+		message = await ctx.channel.send(embed=embed, components=[action_row])
+		
+		# Store message ID
+		ctx.qc.queue_embeds[queue_name] = message.id
+
+		# Initialize button_callbacks if it doesn't exist
+		if not hasattr(ctx.qc, 'button_callbacks'):
+			ctx.qc.button_callbacks = {}
+		
+		# Add button callback
+		ctx.qc.button_callbacks[queue_name] = lambda i: _handle_queue_button(i, queue_name, ctx)
+	except Exception as e:
+		await ctx.error(f"An error occurred while creating the queue embed: {str(e)}")
