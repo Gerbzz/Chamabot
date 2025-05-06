@@ -2,6 +2,8 @@
 import traceback
 import json
 from nextcord import Interaction
+import logging
+import nextcord.ext.commands
 
 from core.console import log
 from core.database import db
@@ -9,6 +11,11 @@ from core.config import cfg
 from core.utils import error_embed, ok_embed, get
 
 import bot
+
+# Configure Nextcord logging
+logging.getLogger('nextcord').setLevel(logging.WARNING)
+logging.getLogger('nextcord.client').setLevel(logging.WARNING)
+logging.getLogger('nextcord.gateway').setLevel(logging.WARNING)
 
 
 async def enable_channel(message):
