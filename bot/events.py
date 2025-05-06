@@ -1,5 +1,5 @@
 import traceback
-from nextcord import ChannelType, Activity, ActivityType
+from nextcord import ChannelType, Activity, ActivityType, Button, View, ButtonStyle
 
 from core.client import dc
 from core.console import log
@@ -76,6 +76,29 @@ async def on_ready():
 		bot.bot_was_ready = True
 		bot.bot_ready = True
 		log.info("Done.")
+		
+		# Register existing views for all queue embeds
+		log.info("Registering existing queue embed views...")
+		for qc in bot.queue_channels.values():
+			for queue in qc.queues:
+				channel_key = f"{queue.name}_{qc.channel.id}"
+				if channel_key in qc.queue_embeds:
+					try:
+						# Create the view
+						view = View(timeout=None)
+						join_button = Button(label="Join", style=ButtonStyle.green, custom_id=f"join_{queue.name}")
+						leave_button = Button(label="Leave", style=ButtonStyle.red, custom_id=f"leave_{queue.name}")
+						join_button.callback = join_callback
+						leave_button.callback = leave_callback
+						view.add_item(join_button)
+						view.add_item(leave_button)
+						
+						# Register the view with the bot
+						dc.add_view(view, message_id=qc.queue_embeds[channel_key])
+						log.info(f"\tRegistered view for queue {queue.name} in {qc.channel.name}")
+					except Exception as e:
+						log.error(f"\tFailed to register view for queue {queue.name}: {str(e)}")
+		log.info("Queue embed view registration complete.")
 	else:  # Reconnected, fetch new channel objects
 		bot.bot_ready = True
 		log.info("Reconnected to discord.")

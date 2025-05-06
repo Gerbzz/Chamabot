@@ -541,6 +541,10 @@ async def queue_embed(ctx, queue_name: str):
 			current_qc.queue_embeds[channel_key] = message.id
 			print(f"✅ Created new embed")
 		
+		# Register the view with the bot for persistence
+		bot.dc.add_view(view, message_id=message.id)
+		print(f"✅ Registered view for message {message.id}")
+		
 		# Start or update the background task
 		task_key = f"{ctx.channel.id}_{queue_name}"
 		if task_key in queue_tasks:
