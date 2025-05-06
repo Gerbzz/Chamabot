@@ -810,6 +810,29 @@ async def _remove_queue_embed(
 		required=True
 	)
 ): await run_slash(bot.commands.remove_queue_embed, interaction=interaction, queue_name=queue_name)
-
 _remove_queue_embed.on_autocomplete("queue_name")(autocomplete.queues)
+
+
+@dc.slash_command(name='global-queue-embed', description='Create a silent queue embed that updates without chat messages', **guild_kwargs)
+async def _global_queue_embed(
+	interaction: Interaction,
+	queue_name: str = SlashOption(
+		name="queue_name",
+		description="Name of the queue to create global embed for",
+		required=True
+	)
+): await run_slash(bot.commands.global_queue_embed, interaction=interaction, queue_name=queue_name)
+_global_queue_embed.on_autocomplete("queue_name")(autocomplete.queues)
+
+
+@dc.slash_command(name='remove-global-queue-embed', description='Remove a global queue embed from the channel', **guild_kwargs)
+async def _remove_global_queue_embed(
+	interaction: Interaction,
+	queue_name: str = SlashOption(
+		name="queue_name",
+		description="Name of the queue to remove global embed for",
+		required=True
+	)
+): await run_slash(bot.commands.remove_global_queue_embed, interaction=interaction, queue_name=queue_name)
+_remove_global_queue_embed.on_autocomplete("queue_name")(autocomplete.queues)
 

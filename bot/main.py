@@ -153,6 +153,14 @@ async def load_state():
 					qc.queue_embeds[channel_key] = message_id
 					# Do not automatically start background tasks or recreate embeds
 					# They will be recreated when the queue_embed command is used
+	
+	# Load global queue embeds data
+	if 'global_queue_embeds' in data:
+		try:
+			bot.commands.queues.load_global_queue_data_from_state(data)
+			log.info("Loaded global queue embeds data")
+		except Exception as e:
+			log.error(f"Failed to load global queue embeds data: {str(e)}")
 
 	log.info("State loaded successfully")
 

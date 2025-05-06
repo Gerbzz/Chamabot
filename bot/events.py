@@ -84,6 +84,54 @@ async def on_ready():
 	# Don't automatically register queue embed views on startup
 	# Users need to manually create queue embeds using the /queue-embed command
 	bot.bot_ready = True
+	
+	# Register global queue embed views
+	log.info("Registering global queue embed views...")
+	try:
+		for key, message_id in bot.commands.queues.global_queue_embeds.items():
+			try:
+				# Get channel and queue info from the key
+				# Format: global_queue-name_channel-id
+				parts = key.split('_')
+				if len(parts) >= 3:  # Ensure we have enough parts
+					queue_name = parts[1]
+					channel_id = int(parts[2])
+					
+					# Get the channel
+					channel = dc.get_channel(channel_id)
+					if channel:
+						# Create the view with join/leave buttons
+						view = View(timeout=None)
+						
+						# Join button
+						join_button = Button(
+							style=ButtonStyle.green.value,
+							label="Join Queue",
+							custom_id=f"global_join_{queue_name}"
+						)
+						join_button.callback = bot.commands.queues.global_join_callback
+						view.add_item(join_button)
+						
+						# Leave button
+						leave_button = Button(
+							style=ButtonStyle.red.value,
+							label="Leave Queue",
+							custom_id=f"global_leave_{queue_name}"
+						)
+						leave_button.callback = bot.commands.queues.global_leave_callback
+						view.add_item(leave_button)
+						
+						# Register the view with the bot
+						dc.add_view(view, message_id=message_id)
+						log.info(f"Registered global view for queue {queue_name} in channel {channel.name}")
+					else:
+						log.error(f"Could not find channel {channel_id} for global queue embed")
+			except Exception as e:
+				log.error(f"Failed to register global view for key {key}: {str(e)}")
+	except Exception as e:
+		log.error(f"Error registering global queue embed views: {str(e)}")
+	
+	log.info("Global queue embed view registration complete.")
 
 
 @dc.event
