@@ -267,26 +267,19 @@ async def _handle_queue_button(interaction, queue_name, ctx):
 async def queue_embed(ctx, queue_name: str):
 	"""Create or update a queue embed with join/leave buttons"""
 	try:
-		print(f"Queue name: {queue_name}")
-		print(f"Queues: {ctx.qc.queues}")  # Debugging line
+		# Find the queue
 		q = find(lambda i: i.name.lower() == queue_name.lower(), ctx.qc.queues)
 		if not q:
 			raise bot.Exc.SyntaxError(f"Queue '{queue_name}' not found on the channel.")
 
-		print(f"Found queue: {q}")
-		print(f"Queue type: {type(q)}")
-		print(f"Queue attributes: {dir(q)}")
-		print(f"Queue config: {q.cfg}")
-		print(f"Queue config type: {type(q.cfg)}")
-		print(f"Queue config attributes: {dir(q.cfg)}")
-
+		# Create the embed
 		embed = Embed(
-			title=f"{queue_name} Queue",
+			title=f"{q.name} Queue",
 			description="Current queued players:",
 			color=0x7289DA
 		)
 
-		print(f"Queue length: {len(q.queue)}")
+		# Add players to embed
 		if len(q.queue):
 			embed.add_field(
 				name="Players",
@@ -300,39 +293,44 @@ async def queue_embed(ctx, queue_name: str):
 				inline=False
 			)
 
+		# Create buttons
 		join_button = Button(
 			style=ButtonStyle.green,
-			custom_id=f"join_{queue_name}",
-			emoji="✅"
+			custom_id=f"join_{q.name}",
+			emoji="✅",
+			label="Join"
 		)
 		leave_button = Button(
 			style=ButtonStyle.red,
-			custom_id=f"leave_{queue_name}",
-			emoji="❌"
+			custom_id=f"leave_{q.name}",
+			emoji="❌",
+			label="Leave"
 		)
 
-		action_row = ActionRow([join_button, leave_button])
+		# Create action row
+		action_row = ActionRow(join_button, leave_button)
 
+		# Handle existing embed
 		if not hasattr(ctx.qc, 'queue_embeds'):
 			ctx.qc.queue_embeds = {}
 
-		if queue_name in ctx.qc.queue_embeds:
+		if q.name in ctx.qc.queue_embeds:
 			try:
-				message = await ctx.channel.fetch_message(ctx.qc.queue_embeds[queue_name])
+				message = await ctx.channel.fetch_message(ctx.qc.queue_embeds[q.name])
 				await message.edit(embed=embed, components=[action_row])
 				return
 			except:
 				pass
 
+		# Create new embed
 		message = await ctx.channel.send(embed=embed, components=[action_row])
-		ctx.qc.queue_embeds[queue_name] = message.id
+		ctx.qc.queue_embeds[q.name] = message.id
 
+		# Set up button callbacks
 		if not hasattr(ctx.qc, 'button_callbacks'):
 			ctx.qc.button_callbacks = {}
 
-		ctx.qc.button_callbacks[queue_name] = lambda i: _handle_queue_button(i, queue_name, ctx)
+		ctx.qc.button_callbacks[q.name] = lambda i: _handle_queue_button(i, q.name, ctx)
 	except Exception as e:
-		print(f"Error in queue_embed: {str(e)}")
-		print(f"Error type: {type(e)}")
-		print(f"Error traceback: {e.__traceback__}")
+		print(f"Error creating queue embed: {str(e)}")
 		await ctx.error(f"An error occurred while creating the queue embed: {str(e)}")
