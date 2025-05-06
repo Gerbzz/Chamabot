@@ -292,9 +292,12 @@ async def add(ctx, queues: str = None):
 
 	qr = dict()  # get queue responses
 	for q in t_queues:
-		qr[q] = await q.add_member(ctx, ctx.author)
+		# Check if this is a global embed channel
+		is_global = bool(ctx.qc.queue_embeds.get(f"{q.name}_{ctx.channel.id}"))
+		qr[q] = await q.add_member(ctx, ctx.author, silent=is_global)
 		if qr[q] == bot.Qr.QueueStarted:
-			await ctx.notice(ctx.qc.topic)
+			if not is_global:
+				await ctx.notice(ctx.qc.topic)
 			# Update the queue embed
 			await update_queue_embed(ctx, q.name)
 			# Also update global embeds if they exist
@@ -308,7 +311,7 @@ async def add(ctx, queues: str = None):
 
 	if bot.Qr.Success in qr.values():
 		await ctx.qc.update_expire(ctx.author)
-		if phrase:
+		if phrase and not any(bool(ctx.qc.queue_embeds.get(f"{q.name}_{ctx.channel.id}")) for q in t_queues):
 			await ctx.reply(phrase)
 		await ctx.notice(ctx.qc.topic)
 		# Update embeds for all affected queues
@@ -375,12 +378,16 @@ async def add_player(ctx, player: Member, queue: str):
 	if (q := find(lambda i: i.name.lower() == queue.lower(), ctx.qc.queues)) is None:
 		raise bot.Exc.SyntaxError(f"Queue '{queue}' not found on the channel.")
 
-	resp = await q.add_member(ctx, p)
+	# Check if this is a global embed channel
+	is_global = bool(ctx.qc.queue_embeds.get(f"{q.name}_{ctx.channel.id}"))
+	resp = await q.add_member(ctx, p, silent=is_global)
 	if resp == bot.Qr.Success:
 		await ctx.qc.update_expire(p)
-		await ctx.reply(ctx.qc.topic)
+		if not is_global:
+			await ctx.reply(ctx.qc.topic)
 	elif resp == bot.Qr.QueueStarted:
-		await ctx.reply(ctx.qc.topic)
+		if not is_global:
+			await ctx.reply(ctx.qc.topic)
 	else:
 		await ctx.error(f"Got bad queue response: {resp.__name__}.")
 

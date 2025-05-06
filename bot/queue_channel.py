@@ -394,7 +394,7 @@ class QueueChannel:
 		else:
 			return "> [" + " | ".join([f"**{q.name}** ({q.status})" for q in populated]) + "]"
 
-	async def remove_members(self, *members, ctx=None, reason=None, highlight=False):
+	async def remove_members(self, *members, ctx=None, reason=None, highlight=False, silent=False):
 		affected = set()
 		for q in (q for q in self.queues if q.length):
 			affected.update(q.pop_members(*members))
@@ -408,7 +408,7 @@ class QueueChannel:
 
 			for m in affected:
 				bot.expire.cancel(self, m)
-			if reason:
+			if reason and not silent:
 				await ctx.notice(self.topic)
 				if highlight:
 					mention = join_and([m.mention for m in affected])
@@ -437,7 +437,7 @@ class QueueChannel:
 						members=mention,
 						reason=reason
 					))
-		elif reason and ctx:
+		elif reason and ctx and not silent:
 			await ctx.ignore(self.gt("Action had no effect"))
 
 	def rating_rank(self, rating):
@@ -498,8 +498,8 @@ class QueueChannel:
 
 			await asyncio.sleep(1)
 
-	async def queue_started(self, ctx, members, message=None):
-		await self.remove_members(*members, ctx=ctx)
+	async def queue_started(self, ctx, members, message=None, silent=False):
+		await self.remove_members(*members, ctx=ctx, silent=silent)
 
 		for m in filter(lambda m: m.id in bot.allow_offline, members):
 			bot.allow_offline.remove(m.id)

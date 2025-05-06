@@ -397,7 +397,7 @@ class PickupQueue:
 				self.qc.gt("You are not allowed to add to {queues} queues.".format(queues=self.name))
 			)
 
-	async def add_member(self, ctx, member):
+	async def add_member(self, ctx, member, silent=False):
 		if (
 			self.cfg.blacklist_role and self.cfg.blacklist_role in member.roles
 			or self.cfg.whitelist_role and self.cfg.whitelist_role not in member.roles
@@ -431,7 +431,7 @@ class PickupQueue:
 			self.queue.remove(m)
 		return members
 
-	async def start(self, ctx):
+	async def start(self, ctx, silent=False):
 		if len(self.queue) < 2:
 			raise bot.Exc.PubobotException(self.qc.gt("Not enough players to start the queue."))
 
@@ -444,7 +444,8 @@ class PickupQueue:
 				queue=self.name,
 				channel=ctx.channel.mention,
 				server=self.cfg.server
-			))
+			)),
+			silent=silent
 		)
 		if self.cfg.team_size:
 			team_size = min(int(self.cfg.size / 2), int(self.cfg.team_size))
