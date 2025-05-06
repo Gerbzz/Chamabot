@@ -267,6 +267,8 @@ async def _handle_queue_button(interaction, queue_name, ctx):
 async def queue_embed(ctx, queue_name: str):
 	"""Create or update a queue embed with join/leave buttons"""
 	try:
+		print(f"Queue name: {queue_name}")
+		print(f"Queues: {ctx.qc.queues}")  # Debugging line
 		q = find(lambda i: i.name.lower() == queue_name.lower(), ctx.qc.queues)
 		if not q:
 			raise bot.Exc.SyntaxError(f"Queue '{queue_name}' not found on the channel.")
