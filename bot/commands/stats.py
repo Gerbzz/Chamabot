@@ -271,12 +271,15 @@ async def team_stats(ctx, queue: str = None):
 	
 	for stat in stats:
 		team_name = f"{stat['alpha_name']} vs {stat['beta_name']}"
+		alpha_win_rate = int((stat['alpha_wins'] / stat['total_matches']) * 100) if stat['total_matches'] > 0 else 0
+		beta_win_rate = int((stat['beta_wins'] / stat['total_matches']) * 100) if stat['total_matches'] > 0 else 0
+		draw_rate = int((stat['draws'] / stat['total_matches']) * 100) if stat['total_matches'] > 0 else 0
+		
 		value = (
 			f"**Total Matches:** {stat['total_matches']}\n"
-			f"**{stat['alpha_name']} Wins:** {stat['alpha_wins']}\n"
-			f"**{stat['beta_name']} Wins:** {stat['beta_wins']}\n"
-			f"**Draws:** {stat['draws']}\n"
-			f"**Win Rate:** {int((stat['alpha_wins'] + stat['beta_wins']) * 100 / stat['total_matches'])}%"
+			f"**{stat['alpha_name']}:** {stat['alpha_wins']} wins ({alpha_win_rate}%)\n"
+			f"**{stat['beta_name']}:** {stat['beta_wins']} wins ({beta_win_rate}%)\n"
+			f"**Draws:** {stat['draws']} ({draw_rate}%)"
 		)
 		embed.add_field(name=team_name, value=value, inline=False)
 	
