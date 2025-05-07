@@ -865,3 +865,15 @@ async def _remove_global_queue_embed(
 		await run_slash(bot.commands.remove_global_queue_embed, interaction=interaction, queue_name=actual_queue_name)
 _remove_global_queue_embed.on_autocomplete("queue_name")(autocomplete.queues)
 
+
+@dc.slash_command(name='team-stats', description='Show team statistics for a queue channel', **guild_kwargs)
+async def _team_stats(
+    interaction: Interaction,
+    queue: str = SlashOption(
+        name="queue",
+        description="Name of the queue to show stats for (optional)",
+        required=False
+    )
+): await run_slash(bot.commands.team_stats, interaction=interaction, queue=queue)
+_team_stats.on_autocomplete("queue")(autocomplete.queues)
+

@@ -1,4 +1,4 @@
-__all__ = ['last_game', 'stats', 'top', 'rank', 'leaderboard']
+__all__ = ['last_game', 'stats', 'top', 'rank', 'leaderboard', 'team_stats']
 
 from time import time
 from math import ceil
@@ -224,3 +224,60 @@ async def leaderboard(ctx, page: int = 1):
 			] for n in range(len(data))]
 		)
 	)
+
+
+async def team_stats(ctx, queue: str = None):
+	"""Show team statistics for a queue channel"""
+	if queue:
+		if queue := find(lambda q: q.name.lower() == queue.lower(), ctx.qc.queues):
+			queue_id = queue.id
+			queue_name = queue.name
+		else:
+			raise bot.Exc.NotFoundError(ctx.qc.gt("Queue not found."))
+	else:
+		# Get stats for all queues in the channel
+		queue_id = None
+		queue_name = ctx.qc.gt("All Queues")
+
+	# Get team statistics from matches
+	query = """
+		SELECT 
+			alpha_name,
+			beta_name,
+			COUNT(*) as total_matches,
+			SUM(CASE WHEN winner = 0 THEN 1 ELSE 0 END) as alpha_wins,
+			SUM(CASE WHEN winner = 1 THEN 1 ELSE 0 END) as beta_wins,
+			SUM(CASE WHEN winner IS NULL THEN 1 ELSE 0 END) as draws
+		FROM qc_matches 
+		WHERE channel_id = %s
+	"""
+	params = [ctx.qc.id]
+	
+	if queue_id:
+		query += " AND queue_id = %s"
+		params.append(queue_id)
+	
+	query += " GROUP BY alpha_name, beta_name ORDER BY total_matches DESC"
+	
+	stats = await db.fetchall(query, tuple(params))
+	
+	if not stats:
+		raise bot.Exc.NotFoundError(ctx.qc.gt("No matches found."))
+	
+	embed = Embed(
+		title=ctx.qc.gt("Team Statistics for {queue}").format(queue=queue_name),
+		colour=Colour(0x50e3c2)
+	)
+	
+	for stat in stats:
+		team_name = f"{stat['alpha_name']} vs {stat['beta_name']}"
+		value = (
+			f"**Total Matches:** {stat['total_matches']}\n"
+			f"**{stat['alpha_name']} Wins:** {stat['alpha_wins']}\n"
+			f"**{stat['beta_name']} Wins:** {stat['beta_wins']}\n"
+			f"**Draws:** {stat['draws']}\n"
+			f"**Win Rate:** {int((stat['alpha_wins'] + stat['beta_wins']) * 100 / stat['total_matches'])}%"
+		)
+		embed.add_field(name=team_name, value=value, inline=False)
+	
+	await ctx.reply(embed=embed)
