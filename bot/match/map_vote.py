@@ -11,8 +11,8 @@ from core.console import log
 class MapVote:
 
 	INT_EMOJIS = [
-		"1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "0️⃣",  # Discord's built-in keycap emojis for 1-10
-		"<:keycap_eleven:1379164982570254347>", "<:keycap_twelve:1379165019803226334>", 
+		"1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟",  # Discord's built-in keycap emojis for 1-10
+		"<:keycap_eleven:1379164982570254347>", "<:keycap_twelve:1379165019803226354>", 
 		"<:keycap_thirteen:1379165123402530967>", "<:keycap_fourteen:1379165199872823457>", 
 		"<:keycap_fifteen:1379165448154906835>", "<:keycap_sixteen:1379165525569175649>", 
 		"<:keycap_seventeen:1379165571895001130>", "<:keycap_eighteen:1379165693735342100>", 
