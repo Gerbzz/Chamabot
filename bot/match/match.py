@@ -369,13 +369,12 @@ class Match:
 			raise bot.Exc.PermissionError(self.gt("You must be a team captain to report a loss or draw."))
 
 		if not draw_flag:
+			await ctx.interaction.response.defer(ephemeral=True)
 			self.winner = abs(team.idx - 1)  # Other team wins
 			self.scores[self.winner] = 1
 			# Register the match results
 			await self.finish_match(ctx)
-			# Now remove from active matches after reporting
-			if self in bot.active_matches:
-				bot.active_matches.remove(self)
+			await ctx.interaction.followup.send(self.gt("Your loss has been reported and the match concluded."), ephemeral=True)
 			return
 
 		# Handle draw/abort requests
@@ -395,12 +394,11 @@ class Match:
 			return
 		team.draw_flag = 1
 		if enemy_team.draw_flag == 1:
+			await ctx.interaction.response.defer(ephemeral=True)
 			self.winner = None
 			# Register the match results
 			await self.finish_match(ctx)
-			# Now remove from active matches after reporting
-			if self in bot.active_matches:
-				bot.active_matches.remove(self)
+			await ctx.interaction.followup.send(self.gt("The draw has been agreed and the match concluded."), ephemeral=True)
 			return
 		await ctx.notice(self.gt("{member} wants to draw.").format(member=member.mention))
 
