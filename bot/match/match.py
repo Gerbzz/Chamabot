@@ -277,10 +277,11 @@ class Match:
 	async def next_state(self, ctx):
 		try:
 			if not self.states:
-				logger.debug(f"Match {self.id} has no more states, finishing match")
+				logger.debug(f"Match {self.id} has no more states")
 				if self.state != self.WAITING_REPORT:
+					# Only finish and remove the match if not waiting for report
 					await self.final_message(ctx)
-				await self.finish_match(ctx)
+					await self.finish_match(ctx)
 				return
 
 			next_state = self.states[0]
@@ -347,34 +348,46 @@ class Match:
 		if self.state != self.WAITING_REPORT:
 			raise bot.Exc.MatchStateError(self.gt("The match must be on the waiting report stage."))
 
+		# Check if member is a captain (must be first in their team)
 		team = find(lambda team: member in team[:1], self.teams[:2])
 		if team is None:
 			raise bot.Exc.PermissionError(self.gt("You must be a team captain to report a loss or draw."))
 
-		enemy_team = self.teams[1-team.idx]
-		if draw_flag and not enemy_team.draw_flag == draw_flag:
-			team.draw_flag = draw_flag
-			await ctx.notice(
-				self.gt(
-					"{self} is calling a draw, waiting for {enemy} to type `/report draw`." if draw_flag == 1 else
-					"{self} offers to cancel the match, waiting for {enemy} to type `/report abort`."
-				).format(
-					self=member.mention,
-					enemy=enemy_team[0].mention,
-				)
-			)
-			return
-
-		if draw_flag == 2:
-			await self.cancel(ctx)
-			return
-
-		elif draw_flag == 1:
-			self.winner = None
-		else:
-			self.winner = enemy_team.idx
+		if not draw_flag:
+			self.winner = abs(team.idx - 1)  # Other team wins
 			self.scores[self.winner] = 1
-		await self.finish_match(ctx)
+			# Register the match results
+			await self.finish_match(ctx)
+			# Now remove from active matches after reporting
+			if self in bot.active_matches:
+				bot.active_matches.remove(self)
+			return
+
+		# Handle draw/abort requests
+		enemy_team = self.teams[abs(team.idx - 1)]
+		if draw_flag == 2:  # Abort request
+			if team.draw_flag == 2:
+				return
+			team.draw_flag = 2
+			if enemy_team.draw_flag == 2:
+				await self.cancel(ctx)
+				return
+			await ctx.notice(self.gt("{member} wants to abort the match.").format(member=member.mention))
+			return
+
+		# Draw request
+		if team.draw_flag == 1:
+			return
+		team.draw_flag = 1
+		if enemy_team.draw_flag == 1:
+			self.winner = None
+			# Register the match results
+			await self.finish_match(ctx)
+			# Now remove from active matches after reporting
+			if self in bot.active_matches:
+				bot.active_matches.remove(self)
+			return
+		await ctx.notice(self.gt("{member} wants to draw.").format(member=member.mention))
 
 	async def report_win(self, ctx, team_name, draw=False):  # version for admins/mods
 		if self.state != self.WAITING_REPORT:
@@ -388,7 +401,12 @@ class Match:
 		else:
 			raise bot.Exc.SyntaxError(self.gt("Specified team name not found."))
 
+		# Register the match results
 		await self.finish_match(ctx)
+		
+		# Now remove from active matches after reporting
+		if self in bot.active_matches:
+			bot.active_matches.remove(self)
 
 	async def report_scores(self, ctx, scores):
 		if self.state != self.WAITING_REPORT:
@@ -440,7 +458,11 @@ class Match:
 			pass
 
 	async def finish_match(self, ctx):
-		bot.active_matches.remove(self)
+		# Only remove from active matches if not in WAITING_REPORT state
+		if self.state != self.WAITING_REPORT:
+			if self in bot.active_matches:
+				bot.active_matches.remove(self)
+
 		self.queue.last_maps += self.maps
 		self.queue.last_maps = self.queue.last_maps[-len(self.maps)*self.queue.cfg.map_cooldown:]
 
