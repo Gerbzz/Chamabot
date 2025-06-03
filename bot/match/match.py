@@ -360,8 +360,10 @@ class Match:
 			await self.final_message(ctx)
 
 	async def report_loss(self, ctx, member, draw_flag):
-		await ctx.interaction.response.defer() # Defer publicly at the start
+		await ctx.interaction.response.defer(ephemeral=False) # Defer publicly at the start
+
 		if self.state != self.WAITING_REPORT:
+			# Error handler should send a response for raised exceptions
 			raise bot.Exc.MatchStateError(self.gt("The match must be on the waiting report stage."))
 
 		# Check if member is a captain (must be first in their team)
@@ -369,38 +371,44 @@ class Match:
 		if team is None:
 			raise bot.Exc.PermissionError(self.gt("You must be a team captain to report a loss or draw."))
 
-		if not draw_flag:
+		# This variable is used in multiple branches, define it once.
+		enemy_team = self.teams[abs(team.idx - 1)]
+
+		if not draw_flag:  # Direct loss report
 			self.winner = abs(team.idx - 1)  # Other team wins
 			self.scores[self.winner] = 1
-			# Register the match results
-			await self.finish_match(ctx)
-		await self.final_message(ctx)
-		return
+			await self.finish_match(ctx) # finish_match handles DB and active_matches
+			await self.final_message(ctx) # final_message sends the concluding public message
+			return
 
-		# Handle draw/abort requests
-		enemy_team = self.teams[abs(team.idx - 1)]
+		# If code reaches here, draw_flag is TRUE (1 for draw, 2 for abort)
+
 		if draw_flag == 2:  # Abort request
-			if team.draw_flag == 2:
-				await self.cancel(ctx)
+			if team.draw_flag == 2: # Current team already requested abort
+				await ctx.followup.send(self.gt("You have already requested to abort this match."), ephemeral=True)
 				return
-			team.draw_flag = 2
-			if enemy_team.draw_flag == 2:
-				await self.cancel(ctx)
-				return
-			await ctx.notice(self.gt("{member} wants to abort the match.").format(member=member.mention))
+		
+			team.draw_flag = 2 # Mark current team's abort request
+			if enemy_team.draw_flag == 2: # Both teams agree to abort
+				await self.cancel(ctx) # cancel() is expected to send its own followup/notice
+			else: # First team to request abort
+				await ctx.followup.send(self.gt("{member} wants to abort the match. The other captain must also use /abort.").format(member=member.mention))
+			return # Return after handling abort logic (either completed or first request)
+
+		# If code reaches here, draw_flag must be 1 (Draw request)
+	
+		if team.draw_flag == 1: # Current team already requested draw
+			await ctx.followup.send(self.gt("You have already requested a draw for this match."), ephemeral=True)
 			return
 
-		# Draw request
-		if team.draw_flag == 1:
-			return
-		team.draw_flag = 1
-		if enemy_team.draw_flag == 1:
-			self.winner = None
-			# Register the match results
+		team.draw_flag = 1 # Mark current team's draw request
+		if enemy_team.draw_flag == 1: # Both teams agree to draw
+			self.winner = None # Mark as draw
 			await self.finish_match(ctx)
-		await self.final_message(ctx)
-		return
-		await ctx.notice(self.gt("{member} wants to draw.").format(member=member.mention))
+			await self.final_message(ctx) # Send concluding public message for draw
+		else: # First team to request draw
+			await ctx.followup.send(self.gt("{member} wants to draw. The other captain must also use /draw.").format(member=member.mention))
+		return # Return after handling draw logic (either completed or first request)
 
 	async def report_win(self, ctx, team_name, draw=False):  # version for admins/mods
 		await ctx.interaction.response.defer() # Defer publicly at the start
@@ -512,7 +520,7 @@ class Match:
 
 			# Notify players
 			try:
-				await ctx.notice(
+				await ctx.followup.send(
 					self.gt("{players} your match has been canceled.").format(players=join_and([p.mention for p in self.players]))
 				)
 			except DiscordException:
