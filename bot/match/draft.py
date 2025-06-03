@@ -202,11 +202,22 @@ class Draft:
 			raise bot.Exc.PermissionError(self.m.gt("It's not your turn to pick. Only the captain can pick."))
 
 		# Validate player availability
+		logger.info(f"Checking if {player.name} is in teams[2] (available players)")
+		# Debug: Print the actual contents of teams[2]
+		logger.info(f"teams[2] contents: {[str(p) for p in self.m.teams[2]]}")
+		logger.info(f"Player object to find: {str(player)}")
+		
+		# Check if player objects are actually the same
+		for available_player in self.m.teams[2]:
+			logger.info(f"Comparing with available player: {str(available_player)}")
+			logger.info(f"IDs match? {available_player.id == player.id}")
+		
 		if player not in self.m.teams[2]:
-			logger.error(f"Player {player.name} not available for picking")
+			logger.error(f"Player {player.name} (ID: {player.id}) not available for picking")
 			# Check if player is in match at all
 			if player not in self.m.players:
-				logger.error(f"Player {player.name} not in match players list")
+				logger.error(f"Player {player.name} (ID: {player.id}) not in match players list")
+				logger.error(f"Match players: {[(p.name, p.id) for p in self.m.players]}")
 				raise bot.Exc.ValueError(self.m.gt("Player {player} is not part of this match.").format(player=player.name))
 			
 			# Check if player is already on a team
@@ -218,8 +229,19 @@ class Draft:
 						team=team.name
 					))
 			
-			# Unexpected state
+			# Check if player objects might be different instances
+			for available_player in self.m.teams[2]:
+				if available_player.id == player.id:
+					logger.error(f"Found player with matching ID but different object instance")
+					# Use the instance from teams[2]
+					player = available_player
+					break
+			
+			# If we still haven't found the player
 			logger.error(f"Player {player.name} in unexpected state - in match but not in any team or available pool")
+			logger.error(f"Current teams state:")
+			for i, team in enumerate(self.m.teams):
+				logger.error(f"Team {i}: {[(p.name, p.id) for p in team]}")
 			raise bot.Exc.ValueError(self.m.gt("Player is in an invalid state. Please report this to an admin."))
 
 		# Add player to the team
