@@ -360,6 +360,7 @@ class Match:
 			await self.final_message(ctx)
 
 	async def report_loss(self, ctx, member, draw_flag):
+		await ctx.interaction.response.defer() # Defer publicly at the start
 		if self.state != self.WAITING_REPORT:
 			raise bot.Exc.MatchStateError(self.gt("The match must be on the waiting report stage."))
 
@@ -369,18 +370,18 @@ class Match:
 			raise bot.Exc.PermissionError(self.gt("You must be a team captain to report a loss or draw."))
 
 		if not draw_flag:
-			await ctx.interaction.response.defer(ephemeral=True)
 			self.winner = abs(team.idx - 1)  # Other team wins
 			self.scores[self.winner] = 1
 			# Register the match results
 			await self.finish_match(ctx)
-			await ctx.interaction.followup.send(self.gt("Your loss has been reported and the match concluded."), ephemeral=True)
-			return
+		await self.final_message(ctx)
+		return
 
 		# Handle draw/abort requests
 		enemy_team = self.teams[abs(team.idx - 1)]
 		if draw_flag == 2:  # Abort request
 			if team.draw_flag == 2:
+				await self.cancel(ctx)
 				return
 			team.draw_flag = 2
 			if enemy_team.draw_flag == 2:
@@ -394,15 +395,15 @@ class Match:
 			return
 		team.draw_flag = 1
 		if enemy_team.draw_flag == 1:
-			await ctx.interaction.response.defer(ephemeral=True)
 			self.winner = None
 			# Register the match results
 			await self.finish_match(ctx)
-			await ctx.interaction.followup.send(self.gt("The draw has been agreed and the match concluded."), ephemeral=True)
-			return
+		await self.final_message(ctx)
+		return
 		await ctx.notice(self.gt("{member} wants to draw.").format(member=member.mention))
 
 	async def report_win(self, ctx, team_name, draw=False):  # version for admins/mods
+		await ctx.interaction.response.defer() # Defer publicly at the start
 		if self.state != self.WAITING_REPORT:
 			raise bot.Exc.MatchStateError(self.gt("The match must be on the waiting report stage."))
 
@@ -416,8 +417,10 @@ class Match:
 
 		# Register the match results
 		await self.finish_match(ctx)
+		await self.final_message(ctx)
 
 	async def report_scores(self, ctx, scores):
+		await ctx.interaction.response.defer() # Defer publicly at the start
 		if self.state != self.WAITING_REPORT:
 			raise bot.Exc.MatchStateError(self.gt("The match must be on the waiting report stage."))
 
@@ -430,6 +433,7 @@ class Match:
 
 		self.scores = scores
 		await self.finish_match(ctx)
+		await self.final_message(ctx)
 
 	async def print_rating_results(self, ctx, before, after):
 		msg = "```markdown\n"
