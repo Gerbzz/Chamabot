@@ -245,11 +245,30 @@ class Draft:
 			raise bot.Exc.ValueError(self.m.gt("Player is in an invalid state. Please report this to an admin."))
 
 		# Add player to the team
+		logger.info(f"Adding {player.name} to {picker_team.name}")
 		picker_team.append(player)
+		
+		# Make sure teams[2] is still a Team object
+		if not isinstance(self.m.teams[2], self.m.Team):
+			logger.warning(f"teams[2] is not a Team object, recreating it")
+			unpicked = list(self.m.teams[2])  # Save current players
+			self.m.teams[2] = self.m.Team(name="unpicked", emoji="📋", idx=-1)  # Recreate Team object
+			self.m.teams[2].extend(unpicked)  # Restore players
+		
+		# Remove player from unpicked pool
+		logger.info(f"Removing {player.name} from unpicked pool")
 		self.m.teams[2].remove(player)
+		
+		# Reset timers
 		self.last_pick_time = int(time.time())
 		self.auto_pick_warning_sent = False
-
+		
+		# Log final team states
+		logger.info(f"Final team states after pick:")
+		for i, team in enumerate(self.m.teams):
+			logger.info(f"Team {i} ({team.name}): {[p.name for p in team]}")
+		
+		# Update the display
 		await self.print(ctx)
 
 	async def put(self, ctx, player, team_name):
