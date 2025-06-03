@@ -168,9 +168,19 @@ class Draft:
 				self.last_pick_time = current_time
 				self.auto_pick_warning_sent = False
 
-	async def pick(self, ctx, captain, player):
-		# Debug: Print initial state
-		logger.info(f"===== PICK ATTEMPT DEBUG =====")
+	async def pick(self, ctx, captain, players):
+		""" Pick a player for the captain's team """
+
+		# Handle single player or list of players
+		if isinstance(players, list):
+			if not players:  # Empty list
+				raise bot.Exc.ValueError(self.m.gt("No player specified"))
+			player = players[0]  # Take first player from list
+		else:
+			player = players
+
+		# Log pick attempt details
+		logger.info("===== PICK ATTEMPT DEBUG =====")
 		logger.info(f"Captain {captain.name} attempting to pick {player.name}")
 		logger.info(f"Match state: {self.m.state}")
 		logger.info(f"Team 0 ({self.m.teams[0].name}): {[p.name for p in self.m.teams[0]]}")
