@@ -70,8 +70,23 @@ class Match:
 		match.maps = match.random_maps(match.cfg['maps'], match.cfg['map_count'], queue.last_maps)
 		match.init_captains(match.cfg['pick_captains'], match.cfg['captains_role_id'])
 		match.init_teams(match.cfg['pick_teams'])
-		if match.ranked:
-			match.states.append(match.WAITING_REPORT)
+		# Initialize states based on configuration
+		new_states = []
+		if match.cfg.get('check_in_timeout', 0) > 0:
+			new_states.append(match.READY_CHECK)
+
+		if match.cfg.get('vote_maps', False) and match.cfg.get('maps'):
+			new_states.append(match.MAP_VOTE)
+
+		if match.cfg.get('pick_teams') == 'draft':
+			new_states.append(match.DRAFT)
+
+		# If any of the above states are added, or if it's a ranked match, it needs to end with WAITING_REPORT.
+		if new_states or match.ranked:
+			new_states.append(match.WAITING_REPORT)
+		
+		match.states = new_states
+
 		bot.active_matches.append(match)
 
 	@classmethod

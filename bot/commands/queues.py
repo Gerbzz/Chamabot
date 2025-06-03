@@ -104,9 +104,9 @@ async def update_queue_embed(ctx, queue_name):
 				# Also update any global embeds, passing the queue channel ID
 				await update_global_queue_embed(ctx.channel, queue_name, ctx.channel.id)
 				return
-			except discord.NotFound:
+			except NotFound:
 				print(f"❌ Message {message_id} not found, will create new one")
-			except discord.Forbidden:
+			except Forbidden:
 				print(f"❌ Bot lacks permissions to edit message {message_id}")
 			except Exception as e:
 				print(f"❌ Error updating message {message_id}: {str(e)}")
