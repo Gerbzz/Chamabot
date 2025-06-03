@@ -418,10 +418,6 @@ class Match:
 
 		# Register the match results
 		await self.finish_match(ctx)
-		
-		# Now remove from active matches after reporting
-		if self in bot.active_matches:
-			bot.active_matches.remove(self)
 
 	async def report_scores(self, ctx, scores):
 		if self.state != self.WAITING_REPORT:
@@ -473,10 +469,9 @@ class Match:
 			pass
 
 	async def finish_match(self, ctx):
-		# Only remove from active matches if not in WAITING_REPORT state
-		if self.state != self.WAITING_REPORT:
-			if self in bot.active_matches:
-				bot.active_matches.remove(self)
+		# Match is finished, so remove from active matches
+		if self in bot.active_matches: 
+			bot.active_matches.remove(self)
 
 		self.queue.last_maps += self.maps
 		self.queue.last_maps = self.queue.last_maps[-len(self.maps)*self.queue.cfg.map_cooldown:]
