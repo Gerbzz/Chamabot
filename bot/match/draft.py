@@ -169,20 +169,58 @@ class Draft:
 				self.auto_pick_warning_sent = False
 
 	async def pick(self, ctx, captain, player):
+		# Debug: Print initial state
+		logger.info(f"===== PICK ATTEMPT DEBUG =====")
+		logger.info(f"Captain {captain.name} attempting to pick {player.name}")
+		logger.info(f"Match state: {self.m.state}")
+		logger.info(f"Team 0 ({self.m.teams[0].name}): {[p.name for p in self.m.teams[0]]}")
+		logger.info(f"Team 1 ({self.m.teams[1].name}): {[p.name for p in self.m.teams[1]]}")
+		logger.info(f"Available players: {[p.name for p in self.m.teams[2]]}")
+		logger.info(f"All players in match: {[p.name for p in self.m.players]}")
+
+		# Check match state
 		if self.m.state != self.m.DRAFT:
+			logger.error(f"Invalid match state: {self.m.state}")
 			raise bot.Exc.MatchStateError(self.m.gt("The match must be on the draft stage."))
 
+		# Calculate and validate pick step
 		pick_step = len(self.m.teams[0]) + len(self.m.teams[1]) - 2
+		logger.info(f"Current pick step: {pick_step}, Pick order length: {len(self.pick_order)}")
 		if pick_step >= len(self.pick_order):
+			logger.error(f"Pick step {pick_step} exceeds pick order length {len(self.pick_order)}")
 			raise bot.Exc.MatchStateError(self.m.gt("All picks are done."))
 
+		# Validate picker team and captain
 		picker_team = self.m.teams[self.pick_order[pick_step]]
-		# Only the captain (first member) can pick
+		logger.info(f"Picker team: {picker_team.name}")
+		logger.info(f"Expected captain: {picker_team[0].name if picker_team and picker_team[0] else 'None'}")
+		logger.info(f"Actual captain: {captain.name}")
+
+		# Check captain permissions
 		if not picker_team or captain != picker_team[0]:
+			logger.error(f"Captain mismatch - Expected: {picker_team[0].name if picker_team and picker_team[0] else 'None'}, Got: {captain.name}")
 			raise bot.Exc.PermissionError(self.m.gt("It's not your turn to pick. Only the captain can pick."))
 
+		# Validate player availability
 		if player not in self.m.teams[2]:
-			raise bot.Exc.ValueError(self.m.gt("Specified player is not available for picking."))
+			logger.error(f"Player {player.name} not available for picking")
+			# Check if player is in match at all
+			if player not in self.m.players:
+				logger.error(f"Player {player.name} not in match players list")
+				raise bot.Exc.ValueError(self.m.gt("Player {player} is not part of this match.").format(player=player.name))
+			
+			# Check if player is already on a team
+			for i, team in enumerate(self.m.teams[:2]):
+				if player in team:
+					logger.error(f"Player {player.name} already on team {team.name}")
+					raise bot.Exc.ValueError(self.m.gt("Player {player} is already on team {team}.").format(
+						player=player.name,
+						team=team.name
+					))
+			
+			# Unexpected state
+			logger.error(f"Player {player.name} in unexpected state - in match but not in any team or available pool")
+			raise bot.Exc.ValueError(self.m.gt("Player is in an invalid state. Please report this to an admin."))
 
 		# Add player to the team
 		picker_team.append(player)
