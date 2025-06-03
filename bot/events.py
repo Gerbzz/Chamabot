@@ -17,17 +17,29 @@ async def on_init():
 
 @dc.event
 async def on_think(frame_time):
-	for match in bot.active_matches:
+	for match in list(bot.active_matches):  # Iterate over a copy for safe removal
 		try:
 			await match.think(frame_time)
 		except Exception as e:
 			log.error("\n".join([
-				f"Error at Match.think().",
-				f"match_id: {match.id}).",
-				f"{str(e)}. Traceback:\n{traceback.format_exc()}=========="
+				f"Error during Match.think() for match_id: {match.id}.",
+				f"Error: {str(e)}. Traceback:\n{traceback.format_exc()}=========="
 			]))
-			bot.active_matches.remove(match)
-			break
+			try:
+				log.info(f"Attempting to cancel match {match.id} due to error in on_think's call to match.think().")
+				if hasattr(match, 'qc') and match.qc:
+					ctx = bot.SystemContext(match.qc)
+					await match.cancel(ctx)
+				else:
+					log.error(f"Cannot cancel match {match.id}: 'qc' attribute not found or is None. Removing directly.")
+					if match in bot.active_matches:
+						bot.active_matches.remove(match)
+			except Exception as cancel_e:
+				log.error(f"Error during attempt to cancel match {match.id} after think error: {str(cancel_e)}\n{traceback.format_exc()}==========")
+				# If cancellation itself fails, as a last resort, remove it directly.
+				if match in bot.active_matches:
+					bot.active_matches.remove(match)
+			break  # Maintain original behavior of stopping on first error in loop
 	await bot.expire.think(frame_time)
 	await bot.noadds.think(frame_time)
 	await bot.stats.jobs.think(frame_time)
