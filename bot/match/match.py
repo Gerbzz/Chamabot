@@ -378,7 +378,6 @@ class Match:
 			self.winner = abs(team.idx - 1)  # Other team wins
 			self.scores[self.winner] = 1
 			await self.finish_match(ctx) # finish_match handles DB and active_matches
-			await self.final_message(ctx) # final_message sends the concluding public message
 			return
 
 		# If code reaches here, draw_flag is TRUE (1 for draw, 2 for abort)

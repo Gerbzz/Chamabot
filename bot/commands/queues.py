@@ -28,111 +28,108 @@ last_global_updates = {}  # Store timestamps of last updates for rate limiting
 # Rate limiting constants
 MIN_UPDATE_INTERVAL = 5  # Minimum seconds between updates for the same embed
 
-async def update_queue_embed(ctx, queue_name):
-	"""Update a queue embed without posting to chat"""
+async def update_queue_embed(ctx, queue_name: str, create_if_missing=False):
+	"""Update an existing queue embed (only creates new one if create_if_missing=True)"""
+	print("\n==================================================")
+	print("🔄 UPDATE QUEUE EMBED")
+	print("==================================================")
+	print(f"🎯 Queue: {queue_name}")
+	print(f"👤 Context type: {type(ctx)}")
+	print(f"🆕 Create if missing: {create_if_missing}")
+	
 	try:
-		# Get the queue channel
-		qc = bot.queue_channels.get(ctx.channel.id)
-		if not qc:
-			print(f"❌ Queue channel {ctx.channel.id} not found")
+		# Get the current channel's queue channel
+		current_qc = bot.queue_channels.get(ctx.channel.id)
+		if not current_qc:
+			print("❌ Current channel is not a queue channel")
 			return
-
-		# Get the queue
-		q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
+			
+		# Find the queue in the current channel
+		q = find(lambda i: i.name.lower() == queue_name.lower(), current_qc.queues)
 		if not q:
-			print(f"❌ Queue {queue_name} not found in channel {ctx.channel.id}")
+			print("❌ Queue not found in this channel")
 			return
-
-		# Create the embed
-		embed = Embed(
-			title=f"{q.name} Queue",
-			description="Current queued players:",
-			color=0x7289DA
-		)
-		if len(q.queue):
-			embed.add_field(
-				name="Players",
-				value="\n".join([f"• {player.display_name}" for player in q.queue]),
-				inline=False
-			)
-		else:
-			embed.add_field(
-				name="Players",
-				value="No players in queue",
-				inline=False
-			)
-
-		# Add queue info
-		embed.add_field(
-			name="Status",
-			value=f"{len(q.queue)}/{q.cfg.size} players",
-			inline=True
-		)
-
-		# Add footer with timestamp
-		embed.set_footer(text=f"Last updated: {time.strftime('%H:%M:%S')}")
-
-		# Create or update view with buttons
-		view = View(timeout=None)
-		join_button = Button(
-			label="Join Queue",
-			style=ButtonStyle.green.value,
-			custom_id=f"join_{queue_name}"
-		)
-		leave_button = Button(
-			label="Leave Queue",
-			style=ButtonStyle.red.value,
-			custom_id=f"leave_{queue_name}"
-		)
-		join_button.callback = join_callback
-		leave_button.callback = leave_callback
-		view.add_item(join_button)
-		view.add_item(leave_button)
-		qc.queue_views[queue_name] = view
-
-		# Get the current message ID
+		
+		# Create channel-specific key for tracking
 		channel_key = f"{queue_name}_{ctx.channel.id}"
-		message_id = qc.queue_embeds.get(channel_key)
-
-		if message_id:
+		
+		# Check if we already have a message for this queue in this channel
+		if channel_key in current_qc.queue_embeds:
+			print(f"📝 Updating existing embed for queue: {queue_name}")
 			try:
-				# Try to update existing message
-				message = await ctx.channel.fetch_message(message_id)
-				await message.edit(embed=embed, view=view)
-				print(f"✅ Updated queue embed for {queue_name}")
+				# Create the updated embed
+				embed = Embed(
+					title=f"{q.name} Queue",
+					description="Current queued players:",
+					color=0x7289DA
+				)
 				
-				# Also update any global embeds, passing the queue channel ID
-				await update_global_queue_embed(ctx.channel, queue_name, ctx.channel.id)
-				return
-			except NotFound:
-				print(f"❌ Message {message_id} not found, will create new one")
-			except Forbidden:
-				print(f"❌ Bot lacks permissions to edit message {message_id}")
+				if len(q.queue):
+					embed.add_field(
+						name="Players",
+						value="\n".join([f"• {player.display_name}" for player in q.queue]),
+						inline=False
+					)
+				else:
+					embed.add_field(
+						name="Players",
+						value="No players in queue",
+						inline=False
+					)
+				
+				# Create the view with join/leave buttons
+				view = View(timeout=None)
+				
+				# Join button
+				join_button = Button(
+					style=ButtonStyle.green.value,
+					label="Join Queue",
+					custom_id=f"join_{queue_name}"
+				)
+				join_button.callback = join_callback
+				view.add_item(join_button)
+				
+				# Leave button
+				leave_button = Button(
+					style=ButtonStyle.red.value,
+					label="Leave Queue",
+					custom_id=f"leave_{queue_name}"
+				)
+				leave_button.callback = leave_callback
+				view.add_item(leave_button)
+				
+				# Try to update the existing message
+				message = await ctx.channel.fetch_message(current_qc.queue_embeds[channel_key])
+				await message.edit(embed=embed, view=view)
+				print(f"✅ Updated existing embed")
+				
+				# Register the view with the bot for persistence
+				dc.add_view(view, message_id=message.id)
+				print(f"✅ Re-registered view for message {message.id}")
+				
 			except Exception as e:
-				print(f"❌ Error updating message {message_id}: {str(e)}")
-
-		# If message doesn't exist or update failed, send a new one
-		new_message = await ctx.channel.send(embed=embed, view=view)
-		qc.queue_embeds[channel_key] = new_message.id
-		print(f"✅ Created new queue embed with ID: {new_message.id}")
-
-		# Register the view with the bot for persistence
-		dc.add_view(view, message_id=new_message.id)
-
-		# Start background task to keep embed at bottom
-		task_key = f"{ctx.channel.id}_{queue_name}"
-		if task_key in bot.queue_tasks:
-			bot.queue_tasks[task_key].cancel()
-		bot.queue_tasks[task_key] = asyncio.create_task(
-			keep_embed_at_bottom(ctx.channel, queue_name, new_message.id)
-		)
-
-		# Also update any global embeds, passing the queue channel ID
-		await update_global_queue_embed(ctx.channel, queue_name, ctx.channel.id)
-
+				print(f"ℹ️ Could not update existing message: {str(e)}")
+				if create_if_missing:
+					print("🆕 Creating new embed since create_if_missing=True")
+					await queue_embed(ctx, queue_name)
+				else:
+					print("🚫 Not creating new embed since create_if_missing=False")
+					# Remove the invalid message ID from tracking
+					del current_qc.queue_embeds[channel_key]
+					save_queue_data()
+		else:
+			print(f"ℹ️ No existing embed found for queue: {queue_name}")
+			if create_if_missing:
+				print("🆕 Creating new embed since create_if_missing=True")
+				await queue_embed(ctx, queue_name)
+			else:
+				print("🚫 Not creating new embed since create_if_missing=False")
+		
 	except Exception as e:
-		print(f"❌ Error updating queue embed: {str(e)}")
+		print(f"❌ Error in update_queue_embed: {str(e)}")
+		print(f"Type: {type(e)}")
 		import traceback
+		print("Traceback:")
 		print(traceback.format_exc())
 
 async def keep_embed_at_bottom(channel, queue_name, message_id):
@@ -153,10 +150,9 @@ async def keep_embed_at_bottom(channel, queue_name, message_id):
 
 			# Check if this message is still registered
 			channel_key = f"{queue_name}_{channel.id}"
-			current_message_id = qc.queue_embeds.get(channel_key)
 			
 			# If our message ID doesn't match the current one, stop the task
-			if current_message_id != message_id:
+			if current_qc.queue_embeds.get(channel_key) != message_id:
 				print(f"ℹ️ Message {message_id} is no longer the active embed for {queue_name}, stopping background task")
 				return
 
@@ -551,9 +547,9 @@ async def maps(ctx, queue: str, one: bool = False):
 
 
 async def queue_embed(ctx, queue_name: str):
-	"""Create a queue embed with join/leave buttons"""
+	"""Create a queue embed with join/leave buttons (always creates new or updates existing)"""
 	print("\n==================================================")
-	print("🎮 QUEUE EMBED UPDATE")
+	print("🎮 QUEUE EMBED CREATE/UPDATE")
 	print("==================================================")
 	print(f"🎯 Queue: {queue_name}")
 	print(f"👤 Context type: {type(ctx)}")
@@ -654,7 +650,7 @@ async def queue_embed(ctx, queue_name: str):
 		# Save queue data
 		save_queue_data()
 		
-		print("✅ Queue embed updated")
+		print("✅ Queue embed created/updated")
 
 		# Respond to the interaction with a success message
 		if message_created:
@@ -669,6 +665,141 @@ async def queue_embed(ctx, queue_name: str):
 		print("Traceback:")
 		print(traceback.format_exc())
 		await ctx.error(f"An error occurred while creating the queue embed: {str(e)}")
+
+async def join_callback(interaction):
+	"""Callback for the join button"""
+	try:
+		# Get the queue name from the button's custom_id
+		queue_name = interaction.data['custom_id'].split('_')[1]
+		
+		# Get the queue channel and queue
+		channel = interaction.channel
+		qc = bot.queue_channels.get(channel.id)
+		if not qc:
+			await interaction.response.send_message("This queue is no longer active.", ephemeral=True)
+			return
+			
+		# Create a SlashContext for the interaction
+		ctx = bot.context.slash.context.SlashContext(qc, interaction)
+			
+		# Add the user to the queue
+		await add(ctx, queue_name)
+		
+		# Update both the normal queue embed (don't create if missing) and any global embeds
+		await update_queue_embed(ctx, queue_name, create_if_missing=False)
+		await update_global_queue_embed(channel, queue_name, qc.id)
+			
+	except Exception as e:
+		print(f"Error in join_callback: {str(e)}")
+		await interaction.response.send_message("An error occurred while joining the queue.", ephemeral=True)
+
+async def leave_callback(interaction):
+	"""Callback for the leave button"""
+	try:
+		# Get the queue name from the button's custom_id
+		queue_name = interaction.data['custom_id'].split('_')[1]
+		
+		# Get the queue channel and queue
+		channel = interaction.channel
+		qc = bot.queue_channels.get(channel.id)
+		if not qc:
+			await interaction.response.send_message("This queue is no longer active.", ephemeral=True)
+			return
+			
+		# Create a SlashContext for the interaction
+		ctx = bot.context.slash.context.SlashContext(qc, interaction)
+		
+		# Find the queue in the channel
+		q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
+		if not q:
+			await interaction.response.send_message(f"Queue {queue_name} not found", ephemeral=True)
+			return
+			
+		# Check if user is in the queue
+		if not q.is_added(interaction.user):
+			await interaction.response.send_message(f"You are not in the {queue_name} queue", ephemeral=True)
+			return
+			
+		# Remove the user from the queue
+		q.pop_members(interaction.user)
+		
+		# Update both normal and global embeds (don't create if missing)
+		await update_queue_embed(ctx, queue_name, create_if_missing=False)
+		await update_global_queue_embed(channel, queue_name, qc.id)
+		
+		# Send a public response
+		await interaction.response.send_message(f"{interaction.user.mention} has left the {queue_name} queue")
+			
+	except Exception as e:
+		print(f"Error in leave_callback: {str(e)}")
+		try:
+			await interaction.response.send_message("An error occurred while leaving the queue.", ephemeral=True)
+		except:
+			pass
+
+async def remove_queue_embed(ctx, queue_name: str):
+	"""Remove a queue embed from the channel"""
+	print("\n==================================================")
+	print("🎮 REMOVE QUEUE EMBED")
+	print("==================================================")
+	print(f"🎯 Queue: {queue_name}")
+	print(f"👤 Context type: {type(ctx)}")
+	
+	try:
+		# Get the current channel's queue channel
+		current_qc = bot.queue_channels.get(ctx.channel.id)
+		if not current_qc:
+			print("❌ Current channel is not a queue channel")
+			await ctx.error("This channel is not a queue channel")
+			return
+			
+		# Find the queue in the current channel
+		q = find(lambda i: i.name.lower() == queue_name.lower(), current_qc.queues)
+		if not q:
+			print("❌ Queue not found in this channel")
+			await ctx.error(f"Queue {queue_name} not found in this channel")
+			return
+		
+		# Create channel-specific key for tracking
+		channel_key = f"{queue_name}_{ctx.channel.id}"
+		
+		# Check if we have a message for this queue in this channel
+		if channel_key in current_qc.queue_embeds:
+			try:
+				# Try to delete the existing message
+				message_id = current_qc.queue_embeds[channel_key]
+				message = await ctx.channel.fetch_message(message_id)
+				await message.delete()
+				print(f"✅ Deleted queue embed for {queue_name}")
+				
+				# Remove the message ID from tracking
+				del current_qc.queue_embeds[channel_key]
+				
+				# Cancel the background task if it exists
+				task_key = f"{ctx.channel.id}_{queue_name}"
+				if task_key in bot.queue_tasks:
+					bot.queue_tasks[task_key].cancel()
+					del bot.queue_tasks[task_key]
+					print(f"✅ Cancelled background task for {queue_name}")
+				
+				# Save queue data
+				save_queue_data()
+				
+				await ctx.success(f"Queue embed for **{queue_name}** has been removed.")
+			except Exception as e:
+				print(f"❌ Error deleting message: {str(e)}")
+				await ctx.error(f"Failed to delete queue embed: {str(e)}")
+		else:
+			print("❌ No queue embed found for this queue")
+			await ctx.error(f"No queue embed found for {queue_name}")
+	
+	except Exception as e:
+		print(f"❌ Error in remove_queue_embed: {str(e)}")
+		print(f"Type: {type(e)}")
+		import traceback
+		print("Traceback:")
+		print(traceback.format_exc())
+		await ctx.error(f"An error occurred while removing the queue embed: {str(e)}")
 
 def save_queue_data():
 	"""Save queue embed message IDs to database"""
@@ -800,284 +931,6 @@ async def recreate_queue_embeds():
 		import traceback
 		print("Traceback:")
 		print(traceback.format_exc())
-
-async def join_callback(interaction):
-	"""Callback for the join button"""
-	try:
-		# Get the queue name from the button's custom_id
-		queue_name = interaction.data['custom_id'].split('_')[1]
-		
-		# Get the queue channel and queue
-		channel = interaction.channel
-		qc = bot.queue_channels.get(channel.id)
-		if not qc:
-			await interaction.response.send_message("This queue is no longer active.", ephemeral=True)
-			return
-			
-		# Create a SlashContext for the interaction
-		ctx = bot.context.slash.context.SlashContext(qc, interaction)
-			
-		# Add the user to the queue
-		await add(ctx, queue_name)
-		
-		# Update both the normal queue embed and any global embeds
-		await update_queue_embed(ctx, queue_name)
-		await update_global_queue_embed(channel, queue_name, qc.id)
-			
-	except Exception as e:
-		print(f"Error in join_callback: {str(e)}")
-		await interaction.response.send_message("An error occurred while joining the queue.", ephemeral=True)
-
-async def leave_callback(interaction):
-	"""Callback for the leave button"""
-	try:
-		# Get the queue name from the button's custom_id
-		queue_name = interaction.data['custom_id'].split('_')[1]
-		
-		# Get the queue channel and queue
-		channel = interaction.channel
-		qc = bot.queue_channels.get(channel.id)
-		if not qc:
-			await interaction.response.send_message("This queue is no longer active.", ephemeral=True)
-			return
-			
-		# Create a SlashContext for the interaction
-		ctx = bot.context.slash.context.SlashContext(qc, interaction)
-		
-		# Find the queue in the channel
-		q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
-		if not q:
-			await interaction.response.send_message(f"Queue {queue_name} not found", ephemeral=True)
-			return
-			
-		# Check if user is in the queue
-		if not q.is_added(interaction.user):
-			await interaction.response.send_message(f"You are not in the {queue_name} queue", ephemeral=True)
-			return
-			
-		# Remove the user from the queue
-		q.pop_members(interaction.user)
-		
-		# Update both normal and global embeds
-		# First update the normal queue embed in the queue's channel
-		await update_queue_embed(ctx, queue_name)
-		
-		# Then update all global embeds for this queue
-		await update_global_queue_embed(channel, queue_name, qc.id)
-		
-		# Send a public response
-		await interaction.response.send_message(f"{interaction.user.mention} has left the {queue_name} queue")
-			
-	except Exception as e:
-		print(f"Error in leave_callback: {str(e)}")
-		try:
-			await interaction.response.send_message("An error occurred while leaving the queue.", ephemeral=True)
-		except:
-			pass
-
-async def remove_queue_embed(ctx, queue_name: str):
-	"""Remove a queue embed from the channel"""
-	print("\n==================================================")
-	print("🎮 REMOVE QUEUE EMBED")
-	print("==================================================")
-	print(f"🎯 Queue: {queue_name}")
-	print(f"👤 Context type: {type(ctx)}")
-	
-	try:
-		# Get the current channel's queue channel
-		current_qc = bot.queue_channels.get(ctx.channel.id)
-		if not current_qc:
-			print("❌ Current channel is not a queue channel")
-			await ctx.error("This channel is not a queue channel")
-			return
-			
-		# Find the queue in the current channel
-		q = find(lambda i: i.name.lower() == queue_name.lower(), current_qc.queues)
-		if not q:
-			print("❌ Queue not found in this channel")
-			await ctx.error(f"Queue {queue_name} not found in this channel")
-			return
-		
-		# Create channel-specific key for tracking
-		channel_key = f"{queue_name}_{ctx.channel.id}"
-		
-		# Check if we have a message for this queue in this channel
-		if channel_key in current_qc.queue_embeds:
-			try:
-				# Try to delete the existing message
-				message_id = current_qc.queue_embeds[channel_key]
-				message = await ctx.channel.fetch_message(message_id)
-				await message.delete()
-				print(f"✅ Deleted queue embed for {queue_name}")
-				
-				# Remove the message ID from tracking
-				del current_qc.queue_embeds[channel_key]
-				
-				# Cancel the background task if it exists
-				task_key = f"{ctx.channel.id}_{queue_name}"
-				if task_key in bot.queue_tasks:
-					bot.queue_tasks[task_key].cancel()
-					del bot.queue_tasks[task_key]
-					print(f"✅ Cancelled background task for {queue_name}")
-				
-				# Save queue data
-				save_queue_data()
-				
-				await ctx.success(f"Queue embed for **{queue_name}** has been removed.")
-			except Exception as e:
-				print(f"❌ Error deleting message: {str(e)}")
-				await ctx.error(f"Failed to delete queue embed: {str(e)}")
-		else:
-			print("❌ No queue embed found for this queue")
-			await ctx.error(f"No queue embed found for {queue_name}")
-	
-	except Exception as e:
-		print(f"❌ Error in remove_queue_embed: {str(e)}")
-		print(f"Type: {type(e)}")
-		import traceback
-		print("Traceback:")
-		print(traceback.format_exc())
-		await ctx.error(f"An error occurred while removing the queue embed: {str(e)}")
-
-async def global_join_callback(interaction):
-	"""Callback for the join button on global queue embeds that doesn't post to chat"""
-	try:
-		# Get the queue name and channel ID from the button's custom_id
-		# Format: global_join_queuename_channelid
-		parts = interaction.data['custom_id'].split('_')
-		if len(parts) >= 4:
-			queue_name = parts[2]
-			queue_channel_id = int(parts[3])
-		else:
-			# Legacy format support
-			queue_name = parts[2]
-			queue_channel_id = interaction.channel.id
-		
-		# Get the queue channel
-		qc = bot.queue_channels.get(queue_channel_id)
-		if not qc:
-			await interaction.response.send_message("This queue is no longer active.", ephemeral=True)
-			return
-			
-		# Create a SlashContext for the interaction
-		ctx = bot.context.slash.context.SlashContext(qc, interaction)
-		
-		# Find the queue in the channel
-		q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
-		if not q:
-			await interaction.response.send_message(f"Queue {queue_name} not found", ephemeral=True)
-			return
-			
-		# Check if user is already in the queue
-		if q.is_added(interaction.user):
-			await interaction.response.send_message(f"You are already in the {queue_name} queue", ephemeral=True)
-			return
-			
-		# Add the user to the queue (directly manipulate the queue)
-		result = await q.add_member(ctx, interaction.user, silent=True)
-		
-		# Update both normal and global embeds
-		if result == bot.Qr.Success or result == bot.Qr.QueueStarted:
-			# First update the normal queue embed in the queue's channel
-			queue_ctx = bot.context.slash.context.SlashContext(qc, interaction)
-			await update_queue_embed(queue_ctx, queue_name)
-			
-			# Then update all global embeds for this queue on all channels
-			for key, message_id in list(global_queue_embeds.items()):
-				if queue_name in key and str(queue_channel_id) in key:
-					parts = key.split('_')
-					if len(parts) >= 4:
-						embed_channel_id = int(parts[2])
-						try:
-							channel = dc.get_channel(embed_channel_id)
-							if channel:
-								await update_global_queue_embed(channel, queue_name, queue_channel_id)
-						except Exception as e:
-							print(f"Error updating global embed {key}: {str(e)}")
-		
-		# Send an ephemeral response to the user
-		if result == bot.Qr.Success:
-			await interaction.response.send_message(f"You've been added to the {queue_name} queue", ephemeral=True)
-		elif result == bot.Qr.AlreadyInQueue:
-			await interaction.response.send_message(f"You are already in the {queue_name} queue", ephemeral=True)
-		elif result == bot.Qr.QueueFull:
-			await interaction.response.send_message(f"The {queue_name} queue is full", ephemeral=True)
-		elif result == bot.Qr.QueueStarted:
-			await interaction.response.send_message(f"The {queue_name} queue has started", ephemeral=True)
-		else:
-			await interaction.response.send_message(f"Couldn't add you to the {queue_name} queue: {result}", ephemeral=True)
-			
-	except Exception as e:
-		print(f"Error in global_join_callback: {str(e)}")
-		try:
-			await interaction.response.send_message("An error occurred while joining the queue.", ephemeral=True)
-		except:
-			pass
-
-async def global_leave_callback(interaction):
-	"""Callback for the leave button on global queue embeds that doesn't post to chat"""
-	try:
-		# Get the queue name and channel ID from the button's custom_id
-		# Format: global_leave_queuename_channelid
-		parts = interaction.data['custom_id'].split('_')
-		if len(parts) >= 4:
-			queue_name = parts[2]
-			queue_channel_id = int(parts[3])
-		else:
-			# Legacy format support
-			queue_name = parts[2]
-			queue_channel_id = interaction.channel.id
-		
-		# Get the queue channel
-		qc = bot.queue_channels.get(queue_channel_id)
-		if not qc:
-			await interaction.response.send_message("This queue is no longer active.", ephemeral=True)
-			return
-			
-		# Create a SlashContext for the interaction
-		ctx = bot.context.slash.context.SlashContext(qc, interaction)
-		
-		# Find the queue in the channel
-		q = find(lambda i: i.name.lower() == queue_name.lower(), qc.queues)
-		if not q:
-			await interaction.response.send_message(f"Queue {queue_name} not found", ephemeral=True)
-			return
-			
-		# Check if user is in the queue
-		if not q.is_added(interaction.user):
-			await interaction.response.send_message(f"You are not in the {queue_name} queue", ephemeral=True)
-			return
-			
-		# Remove the user from the queue
-		q.pop_members(interaction.user)
-		
-		# Update both normal and global embeds
-		# First update the normal queue embed in the queue's channel
-		queue_ctx = bot.context.slash.context.SlashContext(qc, interaction)
-		await update_queue_embed(queue_ctx, queue_name)
-		
-		# Then update all global embeds for this queue on all channels
-		for key, message_id in list(global_queue_embeds.items()):
-			if queue_name in key and str(queue_channel_id) in key:
-				parts = key.split('_')
-				if len(parts) >= 4:
-					embed_channel_id = int(parts[2])
-					try:
-						channel = dc.get_channel(embed_channel_id)
-						if channel:
-							await update_global_queue_embed(channel, queue_name, queue_channel_id)
-					except Exception as e:
-						print(f"Error updating global embed {key}: {str(e)}")
-		
-		# Send an ephemeral response to the user
-		await interaction.response.send_message(f"You've been removed from the {queue_name} queue", ephemeral=True)
-			
-	except Exception as e:
-		print(f"Error in global_leave_callback: {str(e)}")
-		try:
-			await interaction.response.send_message("An error occurred while leaving the queue.", ephemeral=True)
-		except:
-			pass
 
 async def update_global_queue_embed(channel, queue_name, queue_channel_id=None):
 	"""Update a global queue embed without posting to chat"""
