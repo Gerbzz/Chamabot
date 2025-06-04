@@ -987,8 +987,32 @@ async def update_global_queue_embed(channel, queue_name, queue_channel_id=None):
 			print(f"❌ Queue {queue_name} not found in channel {queue_channel_id}")
 			return
 
-		# Check if we have a global embed for this channel and queue
-		embed_key = f"global_{queue_name}_{channel.id}_{queue_channel_id}"
+		# Check if we have global embeds for this queue and queue channel
+		found_embed_key = None
+		for key in global_queue_embeds.keys():
+			if key.startswith(f"global_{queue_name}_") and key.endswith(f"_{queue_channel_id}"):
+				found_embed_key = key
+				break
+
+		if not found_embed_key:
+			print(f"❌ No global embed found for {queue_name} with queue channel {queue_channel_id}")
+			return
+
+		# Extract target channel ID from the key
+		parts = found_embed_key.split('_')
+		if len(parts) >= 4:
+			target_channel_id = int(parts[2])
+		else:
+			print(f"❌ Invalid format for embed key: {found_embed_key}")
+			return
+
+		# Get the target channel
+		target_channel = dc.get_channel(target_channel_id)
+		if not target_channel:
+			print(f"❌ Target channel {target_channel_id} not found for global embed")
+			return
+
+		embed_key = found_embed_key
 		message_id = global_queue_embeds.get(embed_key)
 
 		# Create the embed
@@ -1040,9 +1064,9 @@ async def update_global_queue_embed(channel, queue_name, queue_channel_id=None):
 		if message_id:
 			try:
 				# Try to update existing message
-				message = await channel.fetch_message(message_id)
+				message = await target_channel.fetch_message(message_id)
 				await message.edit(embed=embed, view=view)
-				print(f"✅ Updated global queue embed for {queue_name} in channel {channel.id}")
+				print(f"✅ Updated global queue embed for {queue_name} in channel {target_channel.id}")
 				
 				# Update timestamp
 				last_global_updates[update_key] = current_time
@@ -1055,7 +1079,7 @@ async def update_global_queue_embed(channel, queue_name, queue_channel_id=None):
 				print(f"❌ Error updating global message {message_id}: {str(e)}")
 
 		# If message doesn't exist or update failed, send a new one
-		new_message = await channel.send(embed=embed, view=view)
+		new_message = await target_channel.send(embed=embed, view=view)
 		global_queue_embeds[embed_key] = new_message.id
 		print(f"✅ Created new global queue embed with ID: {new_message.id}")
 		
