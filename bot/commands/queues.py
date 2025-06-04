@@ -77,6 +77,16 @@ async def update_queue_embed(ctx, queue_name: str, create_if_missing=False):
 						inline=False
 					)
 				
+				# Add queue info
+				embed.add_field(
+					name="Status",
+					value=f"{len(q.queue)}/{q.cfg.size} players",
+					inline=True
+				)
+				
+				# Add footer with timestamp
+				embed.set_footer(text=f"Last updated: {time.strftime('%H:%M:%S')}")
+				
 				# Create the view with join/leave buttons
 				view = View(timeout=None)
 				
@@ -610,6 +620,16 @@ async def queue_embed(ctx, queue_name: str):
 				inline=False
 			)
 		
+		# Add queue info
+		embed.add_field(
+			name="Status",
+			value=f"{len(q.queue)}/{q.cfg.size} players",
+			inline=True
+		)
+		
+		# Add footer with timestamp
+		embed.set_footer(text=f"Last updated: {time.strftime('%H:%M:%S')}")
+		
 		# Create channel-specific key for tracking
 		channel_key = f"{queue_name}_{ctx.channel.id}"
 		
@@ -897,6 +917,16 @@ async def recreate_queue_embeds():
 						value="No players in queue",
 						inline=False
 					)
+				
+				# Add queue info
+				embed.add_field(
+					name="Status",
+					value=f"{len(q.queue)}/{q.cfg.size} players",
+					inline=True
+				)
+				
+				# Add footer with timestamp
+				embed.set_footer(text=f"Last updated: {time.strftime('%H:%M:%S')}")
 				
 				# Send new embed
 				new_message = await channel.send(embed=embed, view=view)
