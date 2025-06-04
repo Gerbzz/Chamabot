@@ -162,7 +162,7 @@ async def keep_embed_at_bottom(channel, queue_name, message_id):
 			channel_key = f"{queue_name}_{channel.id}"
 			
 			# If our message ID doesn't match the current one, stop the task
-			if current_qc.queue_embeds.get(channel_key) != message_id:
+			if qc.queue_embeds.get(channel_key) != message_id:
 				print(f"ℹ️ Message {message_id} is no longer the active embed for {queue_name}, stopping background task")
 				return
 
