@@ -917,14 +917,14 @@ async def recreate_queue_embeds():
 						value="No players in queue",
 						inline=False
 					)
-				
+
 				# Add queue info
 				embed.add_field(
 					name="Status",
 					value=f"{len(q.queue)}/{q.cfg.size} players",
 					inline=True
 				)
-				
+
 				# Add footer with timestamp
 				embed.set_footer(text=f"Last updated: {time.strftime('%H:%M:%S')}")
 				
@@ -965,20 +965,17 @@ async def recreate_queue_embeds():
 async def update_global_queue_embed(channel, queue_name, queue_channel_id=None):
 	"""Update a global queue embed without posting to chat"""
 	try:
-		print("\n==================================================")
-		print("🔄 UPDATE GLOBAL QUEUE EMBED")
-		print("==================================================")
-		print(f"🎯 Queue: {queue_name}")
-		print(f"📝 Channel: {channel.name} ({channel.id})")
-		print(f"🔗 Queue Channel ID: {queue_channel_id}")
-		print(f"🗃️ Current global embeds: {list(global_queue_embeds.keys())}")
-		
-		# If no queue_channel_id is provided, assume it's the same as the channel
-		if queue_channel_id is None:
-			queue_channel_id = channel.id
-			print(f"ℹ️ Using channel ID as queue channel ID: {queue_channel_id}")
+		# Rate limiting check
+		current_time = time.time()
+		update_key = f"{queue_name}_{queue_channel_id}_{channel.id}"
+		last_update = last_global_updates.get(update_key, 0)
+		if current_time - last_update < MIN_UPDATE_INTERVAL:
+			print(f"⏳ Skipping update for {update_key} due to rate limiting")
+			return
 		
 		# Get the queue channel
+		if queue_channel_id is None:
+			queue_channel_id = channel.id
 		qc = bot.queue_channels.get(queue_channel_id)
 		if not qc:
 			print(f"❌ Queue channel {queue_channel_id} not found")
@@ -990,108 +987,86 @@ async def update_global_queue_embed(channel, queue_name, queue_channel_id=None):
 			print(f"❌ Queue {queue_name} not found in channel {queue_channel_id}")
 			return
 
-		# Track which embeds were successfully updated
-		updated_embeds = set()
-		failed_embeds = {}
-		skipped_embeds = {}
+		# Check if we have a global embed for this channel and queue
+		embed_key = f"global_{queue_name}_{channel.id}_{queue_channel_id}"
+		message_id = global_queue_embeds.get(embed_key)
 
-		current_time = datetime.now()
-
-		# Update all global embeds for this queue
-		for key, message_id in list(global_queue_embeds.items()):
-			parts = key.split('_')
-			print(f"📋 Processing key: {key}")
-			print(f"📊 Parts: {parts}")
-			
-			if len(parts) >= 4 and parts[0] == "global" and parts[1] == queue_name:
-				# Check rate limiting
-				if key in last_global_updates:
-					time_since_last_update = (current_time - last_global_updates[key]).total_seconds()
-					if time_since_last_update < MIN_UPDATE_INTERVAL:
-						print(f"⏳ Skipping update for {key} due to rate limiting (last update was {time_since_last_update:.2f}s ago)")
-						skipped_embeds[key] = f"Rate limited ({time_since_last_update:.2f}s < {MIN_UPDATE_INTERVAL}s)"
-						continue
-
-				try:
-					embed_channel_id = int(parts[2])
-					embed_channel = dc.get_channel(embed_channel_id)
-					if not embed_channel:
-						print(f"❌ Channel {embed_channel_id} not found for embed {key}")
-						failed_embeds[key] = "Channel not found"
-						continue
-
-					# Create the embed
-					embed = Embed(
-						title=f"{q.name} Queue",
-						description=f"Queue from channel: <#{queue_channel_id}>",
-						color=0x7289DA
-					)
-					if len(q.queue):
-						embed.add_field(
-							name="Players",
-							value="\n".join([f"• {player.display_name}" for player in q.queue]),
-							inline=False
-						)
-					else:
-						embed.add_field(
-							name="Players",
-							value="No players in queue",
-							inline=False
-						)
-					
-					# Add queue info
-					embed.add_field(
-						name="Status",
-						value=f"{len(q.queue)}/{q.cfg.size} players",
-						inline=True
-					)
-					
-					# Add footer with timestamp
-					embed.set_footer(text=f"Last updated: {time.strftime('%H:%M:%S')} • Silent Mode")
-					
-					# Update the message
-					try:
-						message = await embed_channel.fetch_message(message_id)
-						await message.edit(embed=embed)
-						print(f"✅ Updated global queue embed in channel {embed_channel.name} for {queue_name}")
-						updated_embeds.add(key)
-						last_global_updates[key] = current_time
-					except discord.NotFound:
-						print(f"❌ Message {message_id} not found in channel {embed_channel.name}")
-						failed_embeds[key] = "Message not found"
-					except discord.Forbidden:
-						print(f"❌ Bot lacks permissions to edit message {message_id} in channel {embed_channel.name}")
-						failed_embeds[key] = "Missing permissions"
-					except Exception as e:
-						print(f"❌ Error updating message {message_id} in channel {embed_channel.name}: {str(e)}")
-						failed_embeds[key] = str(e)
-				except Exception as e:
-					print(f"❌ Error processing global embed {key}: {str(e)}")
-					failed_embeds[key] = str(e)
-					continue
-
-		# Clean up failed embeds
-		for key, reason in failed_embeds.items():
-			print(f"🗑️ Removing invalid global embed {key}: {reason}")
-			del global_queue_embeds[key]
-			if key in last_global_updates:
-				del last_global_updates[key]
+		# Create the embed
+		embed = Embed(
+			title=f"{q.name} Queue",
+			description="Current queued players:",
+			color=0x7289DA
+		)
+		if len(q.queue):
+			embed.add_field(
+				name="Players",
+				value="\n".join([f"• {player.display_name}" for player in q.queue]),
+				inline=False
+			)
+		else:
+			embed.add_field(
+				name="Players",
+				value="No players in queue",
+				inline=False
+			)
 		
-		# Save changes if any embeds were removed
-		if failed_embeds:
-			save_global_queue_data()
-			print(f"💾 Saved global queue data after removing {len(failed_embeds)} invalid embeds")
+		# Add queue info
+		embed.add_field(
+			name="Status",
+			value=f"{len(q.queue)}/{q.cfg.size} players",
+			inline=True
+		)
+		
+		# Add footer with timestamp
+		embed.set_footer(text=f"Last updated: {time.strftime('%H:%M:%S')}")
 
-		# Log summary
-		if updated_embeds:
-			print(f"📊 Successfully updated {len(updated_embeds)} global embeds for {queue_name}")
-		if skipped_embeds:
-			print(f"⏳ Skipped {len(skipped_embeds)} updates due to rate limiting")
-		if not updated_embeds and not failed_embeds and not skipped_embeds:
-			print(f"ℹ️ No global embeds found for {queue_name}")
+		# Create or update view with buttons
+		view = View(timeout=None)
+		join_button = Button(
+			label="Join Queue",
+			style=ButtonStyle.green.value,
+			custom_id=f"global_join_{queue_name}_{queue_channel_id}"
+		)
+		leave_button = Button(
+			label="Leave Queue",
+			style=ButtonStyle.red.value,
+			custom_id=f"global_leave_{queue_name}_{queue_channel_id}"
+		)
+		join_button.callback = global_join_callback
+		leave_button.callback = global_leave_callback
+		view.add_item(join_button)
+		view.add_item(leave_button)
+
+		if message_id:
+			try:
+				# Try to update existing message
+				message = await channel.fetch_message(message_id)
+				await message.edit(embed=embed, view=view)
+				print(f"✅ Updated global queue embed for {queue_name} in channel {channel.id}")
+				
+				# Update timestamp
+				last_global_updates[update_key] = current_time
+				return
+			except NotFound:
+				print(f"❌ Global message {message_id} not found, will create new one")
+			except Forbidden:
+				print(f"❌ Bot lacks permissions to edit global message {message_id}")
+			except Exception as e:
+				print(f"❌ Error updating global message {message_id}: {str(e)}")
+
+		# If message doesn't exist or update failed, send a new one
+		new_message = await channel.send(embed=embed, view=view)
+		global_queue_embeds[embed_key] = new_message.id
+		print(f"✅ Created new global queue embed with ID: {new_message.id}")
+		
+		# Register the view with the bot for persistence
+		dc.add_view(view, message_id=new_message.id)
+		
+		# Update timestamp
+		last_global_updates[update_key] = current_time
 
 	except Exception as e:
-		print(f"❌ Error in update_global_queue_embed: {str(e)}")
+		print(f"❌ Error updating global queue embed: {str(e)}")
 		import traceback
 		print(traceback.format_exc())
 
