@@ -29,7 +29,7 @@ last_global_updates = {}  # Store timestamps of last updates for rate limiting
 MIN_UPDATE_INTERVAL = 5  # Minimum seconds between updates for the same embed
 
 async def update_queue_embed(ctx, queue_name: str, create_if_missing=False):
-	"""Update an existing queue embed (only creates new one if create_if_missing=True)"""
+	"""Update an existing queue embed (only creates new one if create_if_missing=True, unless the embed is critical and missing)"""
 	print("\n==================================================")
 	print("🔄 UPDATE QUEUE EMBED")
 	print("==================================================")
@@ -119,21 +119,23 @@ async def update_queue_embed(ctx, queue_name: str, create_if_missing=False):
 				
 			except Exception as e:
 				print(f"ℹ️ Could not update existing message: {str(e)}")
+				# Remove the invalid message ID from tracking
+				del current_qc.queue_embeds[channel_key]
+				save_queue_data()
 				if create_if_missing:
 					print("🆕 Creating new embed since create_if_missing=True")
 					await queue_embed(ctx, queue_name)
 				else:
-					print("🚫 Not creating new embed since create_if_missing=False")
-					# Remove the invalid message ID from tracking
-					del current_qc.queue_embeds[channel_key]
-					save_queue_data()
+					print("⚠️ Existing embed missing or invalid, creating new embed anyway as this is a critical update")
+					await queue_embed(ctx, queue_name)
 		else:
 			print(f"ℹ️ No existing embed found for queue: {queue_name}")
 			if create_if_missing:
 				print("🆕 Creating new embed since create_if_missing=True")
 				await queue_embed(ctx, queue_name)
 			else:
-				print("🚫 Not creating new embed since create_if_missing=False")
+				print("⚠️ No embed found, creating new embed anyway as this is a critical update")
+				await queue_embed(ctx, queue_name)
 		
 	except Exception as e:
 		print(f"❌ Error in update_queue_embed: {str(e)}")
