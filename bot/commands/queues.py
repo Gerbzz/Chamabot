@@ -16,6 +16,8 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timedelta
+import nextcord as discord
+from nextcord.ext import commands
 
 # Global dictionaries for queue management
 queue_tasks = {}  # Store active tasks
@@ -249,7 +251,7 @@ async def keep_embed_at_bottom(channel, queue_name, message_id):
 						# Add footer with timestamp
 						embed.set_footer(text=f"Last updated: {time.strftime('%H:%M:%S')}")
 
-						# Create the view
+						# Create the view with join/leave buttons
 						view = View(timeout=None)
 						join_button = Button(
 							label="Join Queue",
