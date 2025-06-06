@@ -75,10 +75,32 @@ class Log:
 		
 
 def user_input():
-	readline.parse_and_bind("tab: complete")
-	while 1:
-		input_cmd = input('>')
-		user_input_queue.put(input_cmd)
+	"""Listen for user input in a separate thread.
+
+	In production the bot often runs under a service manager without an interactive
+	TTY attached. In that case, calling ``input`` raises ``EOFError`` immediately
+	and crashes the thread, taking the whole application down. We catch that
+	exception (and ``KeyboardInterrupt``) and exit the thread gracefully instead
+	of letting it propagate.
+	"""
+	try:
+		readline.parse_and_bind("tab: complete")
+		while True:
+			try:
+				input_cmd = input('>')
+			except EOFError:
+				# Non-interactive shell – stop listening without killing the bot.
+				log.info("Console input closed (EOF). Exiting input thread.")
+				break
+			except KeyboardInterrupt:
+				log.info("Console input interrupted with Ctrl+C. Exiting input thread.")
+				break
+
+			# Put the command in the queue only if we actually received something.
+			if input_cmd:
+				user_input_queue.put(input_cmd)
+	except Exception as e:
+		log.error(f"Error in console input thread: {e}")
 
 
 def terminate():
