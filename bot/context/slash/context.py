@@ -12,6 +12,10 @@ class SlashContext(Context):
 
 	def __init__(self, qc: QueueChannel, interaction: Interaction):
 		self.interaction = interaction
+		# Provide a direct reference to the interaction followup for convenience
+		# This allows calling `ctx.followup.send(...)` consistently across different
+		# context implementations (message vs slash).
+		self.followup = interaction.followup
 		super().__init__(qc, interaction.channel, interaction.user)
 
 	async def reply(self, *args, **kwargs):
